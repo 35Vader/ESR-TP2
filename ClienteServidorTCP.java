@@ -1,9 +1,13 @@
-import java.io.*;
-import java.net.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
 
 public class ClienteServidorTCP {
 
-    public static void main(String[] args) {
+    public static <String> void main(String[] args) {
         final int porta = 12345;
 
         // Inicialização do servidor
@@ -21,7 +25,7 @@ public class ClienteServidorTCP {
                         PrintWriter escritor = new PrintWriter(clienteSocket.getOutputStream(), true);
 
                         // Leitura da mensagem do cliente e envio de volta
-                        String mensagem = leitor.readLine();
+                        String mensagem = (String) leitor.readLine();
                         System.out.println("Cliente diz: " + mensagem);
                         escritor.println("Servidor ecoa: " + mensagem);
 
@@ -51,7 +55,7 @@ public class ClienteServidorTCP {
                 escritor.println("Olá, servidor!");
 
                 // Resposta do servidor
-                String resposta = leitor.readLine();
+                String resposta = (String) leitor.readLine();
                 System.out.println("Resposta do servidor: " + resposta);
 
                 // Fecho da conexão com o servidor
@@ -62,4 +66,8 @@ public class ClienteServidorTCP {
         }).start();
     }
 }
+
+
+
+
 
