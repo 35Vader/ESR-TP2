@@ -1,6 +1,8 @@
 import java.io.*;
 import java.net.*;
-import java.util.Scanner;
+
+import java.io.*;
+import java.net.*;
 
 public class oNode {
     public static void main(String[] args) {
@@ -12,6 +14,22 @@ public class oNode {
                 try (ServerSocket servidorSocket = new ServerSocket(porta)) {
                     System.out.println("Servidor iniciado na porta " + porta);
 
+                    // Thread para leitura de mensagens do console (entrada)
+                    new Thread(() -> {
+                        try {
+                            BufferedReader consoleReader = new BufferedReader(new InputStreamReader(System.in));
+                            String mensagem;
+                            while (true) {
+                                mensagem = consoleReader.readLine();
+                                if (mensagem != null) {
+                                    System.out.println("Você diz: " + mensagem);
+                                }
+                            }
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }).start();
+
                     while (true) {
                         Socket clienteSocket = servidorSocket.accept();
                         System.out.println("Conexão estabelecida com um cliente.");
@@ -20,18 +38,18 @@ public class oNode {
                         BufferedReader leitor = new BufferedReader(new InputStreamReader(clienteSocket.getInputStream()));
                         PrintWriter escritor = new PrintWriter(clienteSocket.getOutputStream(), true);
 
-                        // Leitura e envio de mensagens do cliente
-                        String mensagem;
-                        while ((mensagem = leitor.readLine()) != null) {
-                            System.out.println("Cliente diz: " + mensagem);
-
-                            // Envio da resposta
-                            escritor.println("Servidor ecoa: " + mensagem);
-                        }
-
-                        // Fecho da conexão com o cliente
-                        clienteSocket.close();
-                        System.out.println("Conexão com o cliente fechada.");
+                        // Thread para leitura de mensagens do cliente (entrada)
+                        new Thread(() -> {
+                            try {
+                                String mensagem;
+                                while ((mensagem = leitor.readLine()) != null) {
+                                    System.out.println("Cliente diz: " + mensagem);
+                                    escritor.println("Servidor repete: " + mensagem);
+                                }
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }).start();
                     }
                 }
             } catch (IOException e) {
@@ -47,19 +65,14 @@ public class oNode {
                 // Configuração do leitor e do escritor para o cliente
                 BufferedReader leitor = new BufferedReader(new InputStreamReader(clienteSocket.getInputStream()));
                 PrintWriter escritor = new PrintWriter(clienteSocket.getOutputStream(), true);
-                Scanner scanner = new Scanner(System.in);
 
                 // Envio e receção de mensagens do servidor
-                System.out.print("intruduza mensagem: ");
-                String s = scanner.nextLine();
-                escritor.println(s);
+                escritor.println("HELLO, servidor!");
                 String resposta = leitor.readLine();
                 System.out.println("Resposta do servidor: " + resposta);
 
                 // Envio de outra mensagem
-                System.out.print("intruduza mensagem: ");
-                String s2 = scanner.nextLine();
-                escritor.println(s2);
+                escritor.println("How are you?");
                 resposta = leitor.readLine();
                 System.out.println("Resposta do servidor: " + resposta);
 
@@ -71,3 +84,4 @@ public class oNode {
         }).start();
     }
 }
+
