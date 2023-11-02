@@ -1,5 +1,6 @@
 import java.io.*;
 import java.net.*;
+import java.util.Scanner;
 
 public class oNode {
     public static void main(String[] args) {
@@ -46,14 +47,19 @@ public class oNode {
                 // Configuração do leitor e do escritor para o cliente
                 BufferedReader leitor = new BufferedReader(new InputStreamReader(clienteSocket.getInputStream()));
                 PrintWriter escritor = new PrintWriter(clienteSocket.getOutputStream(), true);
+                Scanner scanner = new Scanner(System.in);
 
                 // Envio e receção de mensagens do servidor
-                escritor.println("HELLO, servidor!");
+                System.out.print("intruduza mensagem: ");
+                String s = scanner.nextLine();
+                escritor.println(s);
                 String resposta = leitor.readLine();
                 System.out.println("Resposta do servidor: " + resposta);
 
                 // Envio de outra mensagem
-                escritor.println("How are you?");
+                System.out.print("intruduza mensagem: ");
+                String s2 = scanner.nextLine();
+                escritor.println(s2);
                 resposta = leitor.readLine();
                 System.out.println("Resposta do servidor: " + resposta);
 
