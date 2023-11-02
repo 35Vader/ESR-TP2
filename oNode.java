@@ -22,7 +22,7 @@ public class oNode {
                             while (true) {
                                 mensagem = consoleReader.readLine();
                                 if (mensagem != null) {
-                                    System.out.println("Você diz: " + mensagem);
+                                    System.out.println("Você disse: " + mensagem);
                                 }
                             }
                         } catch (IOException e) {
