@@ -28,10 +28,11 @@ public class Bootstraper {
         return a;
     }
 
-    public void setVizinhos(String[] vizinhos) {
-        for (String vizinho: vizinhos) {
-            this.vizinhos.add(vizinho);
+    public void setTopologia(String[] ips, String[] vizinhos) {
+        for (int i = 0; i < ips.length; i++) {
+            topologia.put(ips[i],vizinhos[i]);
         }
+
     }
 
     public void ler(String ip) throws IOException {

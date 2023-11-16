@@ -24,9 +24,9 @@ public class Node {
         this.connectionManagerIdentifier = connectionManagerIdentifier;
 
         // Configuração do socket multicast
-        this.group = InetAddress.getByName(multicastGroup);
-        this.multicastSocket = new MulticastSocket(multicastPort);
-        this.multicastSocket.joinGroup(group);
+        ///this.group = InetAddress.getByName(multicastGroup);
+        //this.multicastSocket = new MulticastSocket(multicastPort);
+        //this.multicastSocket.joinGroup(group);
 
         // Inicialização do Connection Manager
         connectionManagerIdentifier.setConnectionManagers(this.ip, this.porta);
