@@ -14,7 +14,7 @@ public class Bootstraper {
 
     private Socket escreve = new Socket(ip,porta_escreve);
     private Socket le = new Socket(ip,porta_le);
-     
+    // 121.191.51.101,12341
 
     // Node 1,      ip = 121.191.51.101, porta = 12341
     // Node 2,      ip = 122.192.52.102, porta = 12342

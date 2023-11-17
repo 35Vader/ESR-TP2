@@ -1,6 +1,6 @@
 import java.io.IOException;
 
-public class Main {
+/*public class Main {
 
     public static void main(String[] args) throws IOException {
             ConnectionManagerIdentifier connectionManagerIdentifier = new ConnectionManagerIdentifier();
@@ -25,4 +25,4 @@ public class Main {
             bootstraper.setTopologia(ips,vizinhos);
 
     }
-}
+}*/
