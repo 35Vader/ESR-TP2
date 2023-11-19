@@ -6,10 +6,17 @@ import java.net.*;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 
-//mensagens para nós = ip-type|meng
+//mensagens para nós = ip-type/meng
 
 public class Node {
+    // ip do Node
     private  final String ip;
+
+    // porta do bootstraper
+    private final int porta_bootstraper;
+
+    // porta do socket
+    private final int porta;
 
     ///private ReentrantLock vizinhos_lock;
     private final ReentrantLock l_fila_de_espera = new ReentrantLock();
@@ -17,11 +24,17 @@ public class Node {
     // lock da lista de vizinhos
     private final ReentrantLock l_vizinhos = new ReentrantLock();
 
-    private final int porta;
+    // lock da lista dos estados dos vizinhos
+    private final ReentrantLock l_ok = new ReentrantLock();
+
     // ip->porta
     private final HashMap<String,Integer> vizinhos = new HashMap<>();
-    private final int porta_bootstraper;
-    private final HashMap < String, ArrayList<String> > fila_de_espera = new HashMap<>(); // ip -> [men]
+
+    // ip -> [men]
+    private final HashMap < String, ArrayList<String> > fila_de_espera = new HashMap<>();
+
+    // ip -> ok ou ip->""
+    private final HashMap <String,String > estados_de_vizinhos = new HashMap<>();
 
     // Construtor
     public Node(String ip, int porta, int porta_bootstraper) throws IOException {
@@ -31,12 +44,21 @@ public class Node {
         this.porta_bootstraper = porta_bootstraper;
     }
 
+    public void inicializa() throws IOException {
+        // preparar servidor
+        servidor();
+        //primeira fase
+        requestVizinhos();
+        // segunda fase
+        okVizinhos();
+    }
+
     private void SmartPut(String ip, String mensagem, HashMap<String,ArrayList<String>> fila){
         ArrayList<String> temp;
         if((temp = fila.get(ip)) != null) temp.add(mensagem);
 
         else{
-            temp = new ArrayList<String>();
+            temp = new ArrayList<>();
             temp.add(mensagem);
             fila.put(ip,temp);
         }
@@ -46,7 +68,7 @@ public class Node {
         Set<String> v = new HashSet<>(); // vizinhos que mandaram mensagues
 
         for (String key: fila.keySet() ) {
-                if(!fila.get(key).isEmpty()) v.add(key);
+            if(!fila.get(key).isEmpty()) v.add(key);
         }
 
         // Convert the Set to a List
@@ -73,7 +95,7 @@ public class Node {
     }
 
     //recessor geral
-    public void servidor(){
+    private void servidor(){
         // Uma especie de recessionista
         new Thread(() -> {
                 try (ServerSocket ouvinte_mestre = new ServerSocket(this.porta)) {
@@ -86,9 +108,9 @@ public class Node {
                             BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
                             String mensagem;
                             while (true) {
-                                //ip-tipo|mensg
+                                //ip-tipo/mensg
                                 if ( (mensagem = leitor_vizinho.readLine()) != null){
-                                    // [ip,tipo|mensg]
+                                    // [ip,tipo/mensg]
                                     String [] ip_mensg = mensagem.split("-");
                                     try {
                                         l_fila_de_espera.lock();
@@ -112,28 +134,35 @@ public class Node {
                             while (true) {
                                 if (!this.fila_de_espera.values().isEmpty()) {
                                     String mensagem;
+                                    String ip;
                                     try {
                                         l_fila_de_espera.lock();
-                                        String key = ChooseKey(this.fila_de_espera);
-                                        mensagem = this.fila_de_espera.get(key).get(0);
-                                        this.fila_de_espera.get(key).remove(0);
+                                        ip = ChooseKey(this.fila_de_espera);
+                                        mensagem = this.fila_de_espera.get(ip).get(0);
+                                        this.fila_de_espera.get(ip).remove(0);
                                     } finally {
                                         l_fila_de_espera.unlock();}
 
                                     // [tipo, meng]
-                                    String [] mensagem_split = mensagem.split("|");
+                                    String [] mensagem_split = mensagem.split("/");
 
                                     switch (mensagem_split[0]) {
                                         case "ok?":
-                                            escritor_vizinho.println("ok");
+                                            escritor_vizinho.println(this.ip+"-ok/");
                                             break;
-
+                                        case "ok":
+                                            try {
+                                                l_ok.lock();
+                                                this.estados_de_vizinhos.put(ip,"ok");
+                                            }finally { l_ok.unlock();}
+                                            break;
                                         case "Vizinhos":
                                             // "121.191.51.101:12341,121.191.52.101:12342"
                                             try {
                                                l_vizinhos.lock();
                                                 SetVizinhos(mensagem_split[1]);
                                             } finally{l_vizinhos.unlock();}
+                                            break;
 
                                         case "stream":
                                             break;
@@ -152,60 +181,28 @@ public class Node {
 
 
     // primeira fase defenir os vizinhos
-    public void setVizinhos2() throws IOException{
+    private void requestVizinhos() throws IOException{
 
-        new Thread(() -> {
-            Socket bootstraper = null;
-            PrintWriter escritor = null;
+        Socket bootstraper;
+        PrintWriter escritor;
 
-            try {
-                bootstraper = new Socket(ip, porta_bootstraper);
-                escritor = new PrintWriter(bootstraper.getOutputStream(), true);
+        bootstraper = new Socket(ip, porta_bootstraper);
+        escritor = new PrintWriter(bootstraper.getOutputStream(), true);
 
-                escritor.println(this.ip+ "-" + "Vizinhos|");
+        escritor.println(this.ip+ "-" + "Vizinhos/");
 
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                try {
-                    if (escritor != null) escritor.close();
-                    if (bootstraper != null) bootstraper.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
+        try {
+            escritor.close();
+            bootstraper.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
     }
 
-    //segunda fase
-    public void okVizinhos(){
+    //fase para ver se os vizinhos estão ok
+    private void okVizinhos(){
         for ( String ip: vizinhos.keySet() ) {
-            new Thread(() -> {
-                Socket vizinho = null;
-                BufferedReader leitor = null;
-
-                try {
-                    vizinho = new Socket(this.ip, this.vizinhos.get(ip));
-                    leitor = new BufferedReader(new InputStreamReader(vizinho.getInputStream()));
-
-                    while (leitor.readLine() == null);
-
-                    // ok,ip
-                    String mens = leitor.readLine();
-
-
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } finally {
-                    try {
-                        if (leitor != null) leitor.close();
-                        if (vizinho != null) vizinho.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }).start();
 
             new Thread(() -> {
                 Socket vizinho = null;
@@ -215,7 +212,7 @@ public class Node {
                     vizinho = new Socket(this.ip, this.vizinhos.get(ip));
                     escritor = new PrintWriter(vizinho.getOutputStream(), true);
 
-                    escritor.println("ok?," + this.ip);
+                    escritor.println(this.ip+"-ok?/");
 
                 } catch (IOException e) {
                     e.printStackTrace();
