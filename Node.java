@@ -164,7 +164,7 @@ public class Node {
                                             } finally{l_vizinhos.unlock();}
                                             break;
 
-                                        case "stream":
+                                        case "":
                                             break;
 
                                         default:
