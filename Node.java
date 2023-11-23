@@ -33,7 +33,7 @@ public class Node {
     // ip -> [men]
     private final HashMap < String, ArrayList<String> > fila_de_espera = new HashMap<>();
 
-    // ip -> ok ou ip->""
+    // ip -> "ok# ou ip->""
     private final HashMap <String,String > estados_de_vizinhos = new HashMap<>();
 
     // Construtor
