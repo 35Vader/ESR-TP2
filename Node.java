@@ -45,7 +45,7 @@ public class Node {
     // ip -> [men]
     private final HashMap < String, ArrayList<String> > fila_de_espera = new HashMap<>();
 
-    // ip -> "ok# ou ip->""
+    // ip -> "ok" ou ""
     private final HashMap <String,String > estados_de_vizinhos = new HashMap<>();
 
     //ip do que me enviou Arvore -> mensegagem que me enviou
@@ -132,8 +132,8 @@ public class Node {
                             BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
                             String mensagem;
                             while (true) {
-                                //ip-tipo/mensg
-                                if ( (mensagem = leitor_vizinho.readLine()) != null){
+                                    //ip-tipo/mensg
+                                    mensagem = leitor_vizinho.readLine();
                                     // [ip,tipo/mensg]
                                     String [] ip_mensg = mensagem.split("-");
                                     try {
@@ -142,7 +142,7 @@ public class Node {
                                     }
                                     finally {
                                         l_fila_de_espera.unlock();}
-                                    }
+
                                 }
                             }
                         catch (IOException e) {e.printStackTrace();}
@@ -210,9 +210,9 @@ public class Node {
                                             try {
                                                 l_mensagem.lock();
                                                 String arvore = this.mensagem.get(mensagem_split[1]);
-                                                arvore_atualizada = arvore + this.ip + latencia + ip;
+                                                arvore_atualizada = arvore + "!" + this.ip + latencia + ip;
                                             }finally {l_mensagem.unlock();}
-                                            escritor_vizinho.println(this.ip +"-Arvore?/"+ arvore_atualizada);
+                                            escritor_vizinho.println(this.ip +"-Arvore?/"+arvore_atualizada);
                                             break;
 
                                         case "Arvore?":
