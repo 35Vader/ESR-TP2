@@ -1,7 +1,4 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.*;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
@@ -15,20 +12,35 @@ public class Node {
     // porta do bootstraper
     private final int porta_bootstraper;
 
-    // porta do socket
+    // porta do socket udp para enviar strems
+    private final int porta_strems;
+
+    // porta do socket de tcp
     private final int porta;
 
-    ///private ReentrantLock vizinhos_lock;
+    //lock das listas de latencias
+    private final ReentrantLock l_lantencia = new ReentrantLock();
+
+    // lock da lista de mensagem de caminhos
+    private final ReentrantLock l_mensagem = new ReentrantLock();
+
+    ///lock da fila de espera;
     private final ReentrantLock l_fila_de_espera = new ReentrantLock();
 
     // lock da lista de vizinhos
     private final ReentrantLock l_vizinhos = new ReentrantLock();
 
+    // lock da lista de vizinhos
+    private final ReentrantLock l_vizinhos_udp = new ReentrantLock();
+
     // lock da lista dos estados dos vizinhos
     private final ReentrantLock l_ok = new ReentrantLock();
 
-    // ip->porta
+    // ip->porta_tcp
     private final HashMap<String,Integer> vizinhos = new HashMap<>();
+
+    //ip->porta_udp
+    private final HashMap<String,Integer> vizinhos_udp = new HashMap<>();
 
     // ip -> [men]
     private final HashMap < String, ArrayList<String> > fila_de_espera = new HashMap<>();
@@ -36,12 +48,20 @@ public class Node {
     // ip -> "ok# ou ip->""
     private final HashMap <String,String > estados_de_vizinhos = new HashMap<>();
 
+    //ip do que me enviou Arvore -> mensegagem que me enviou
+    private final HashMap <String, String> mensagem = new HashMap<>() ;
+
+    // ip vizinhos que quero medir as latencia -> tempo que mandei a mensaguem
+    private  final HashMap <String,Long> latencia = new HashMap<>();
+
+
     // Construtor
-    public Node(String ip, int porta, int porta_bootstraper) throws IOException {
+    public Node(String ip, int porta, int porta_bootstraper, int porta_strems) throws IOException {
 
         this.ip = ip;
         this.porta = porta;
         this.porta_bootstraper = porta_bootstraper;
+        this.porta_strems = porta_strems;
     }
 
     public void inicializa() throws IOException {
@@ -51,6 +71,8 @@ public class Node {
         requestVizinhos();
         // segunda fase
         okVizinhos();
+        // mandar a stream
+        servidor_stream();
     }
 
     private void SmartPut(String ip, String mensagem, HashMap<String,ArrayList<String>> fila){
@@ -83,14 +105,16 @@ public class Node {
     }
 
     private void SetVizinhos(String vizinhos) {
-        // [121.191.51.101:12341,121.191.52.101:12342]
+        // [121.191.51.101:12341:14321,121.191.52.101:12342:24321]
         String[] ips_portas = vizinhos.split(",");
 
         for (String ip_porta : ips_portas) {
-            // [121.191.51.101, 12341]
+            // [121.191.51.101, 12341, 14321]
             String[] vizinho = ip_porta.split(":");
 
-            this.vizinhos.put(vizinho[0], Integer.parseInt(vizinho[1]));
+            this.vizinhos.put(vizinho[0],     Integer.parseInt(vizinho[1]));
+
+            this.vizinhos_udp.put(vizinho[0], Integer.parseInt(vizinho[2]));
         }
     }
 
@@ -147,24 +171,59 @@ public class Node {
                                     String [] mensagem_split = mensagem.split("/");
 
                                     switch (mensagem_split[0]) {
+
                                         case "ok?":
                                             escritor_vizinho.println(this.ip+"-ok/");
                                             break;
+
                                         case "ok":
                                             try {
                                                 l_ok.lock();
                                                 this.estados_de_vizinhos.put(ip,"ok");
                                             }finally { l_ok.unlock();}
                                             break;
+
                                         case "Vizinhos":
-                                            // "121.191.51.101:12341,121.191.52.101:12342"
+                                            // "121.191.51.101:12341:14321, 121.191.52.101:12342:24321"
                                             try {
                                                l_vizinhos.lock();
+                                               l_vizinhos_udp.lock();
                                                 SetVizinhos(mensagem_split[1]);
-                                            } finally{l_vizinhos.unlock();}
+                                            } finally{l_vizinhos.unlock(); l_vizinhos_udp.unlock();}
                                             break;
 
-                                        case "":
+                                        case "metricas?":
+                                            escritor_vizinho.println(this.ip+"-metrica/"+ mensagem_split[1]);
+                                            break;
+
+                                        case "metrica":
+                                            // parar o timer para o ip, manda mensaguem Arvore para este vizinho com
+                                            long tempo_fim = System.currentTimeMillis();
+                                            long latencia;
+                                            String arvore_atualizada;
+                                            try {
+                                                l_lantencia.lock();
+                                                latencia = tempo_fim - this.latencia.get(ip);
+                                            }finally {l_lantencia.unlock();}
+
+                                            // as metricas atualizadas
+                                            try {
+                                                l_mensagem.lock();
+                                                String arvore = this.mensagem.get(mensagem_split[1]);
+                                                arvore_atualizada = arvore + this.ip + latencia + ip;
+                                            }finally {l_mensagem.unlock();}
+                                            escritor_vizinho.println(this.ip +"-Arvore?/"+ arvore_atualizada);
+                                            break;
+
+                                        case "Arvore?":
+                                            // "121.191.51.101 ,10, 121.191.52.101!etc!etc!etc"
+                                            // significa que de o Node da esquerda até a Node da direita
+                                            // a stream demora 10 milesegundos
+                                            try {
+                                                l_mensagem.lock();
+                                                this.mensagem.put(ip,mensagem_split[1]);
+                                            }finally {l_mensagem.unlock();}
+                                            metricas(ip);
                                             break;
 
                                         default:
@@ -179,6 +238,45 @@ public class Node {
     }
 
 
+    private void servidor_stream(){
+        // Uma especie de recessionista
+        new Thread(() -> {
+            try (DatagramSocket socket = new DatagramSocket(this.porta_strems)) {
+
+                // Thread para leitura da stream
+                new Thread(() -> {
+                    try {
+                        byte[] receiveData = new byte[1024];
+                        while (true) {
+                            DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+                            socket.receive(receivePacket);
+
+                            // Converte os bytes recebidos para um DataInputStream
+                            ByteArrayInputStream byteStream = new ByteArrayInputStream(receivePacket.getData());
+                            DataInputStream dataInputStream = new DataInputStream(byteStream);
+
+                            // Lê os dados do DataInputStream
+                            int length = dataInputStream.readInt();
+                            byte[] data = new byte[length];
+                            dataInputStream.readFully(data);
+
+                            sendStream();
+                        }
+                    }
+                    catch (IOException e) {e.printStackTrace();}
+
+                }).start();
+
+            }
+
+
+
+
+            catch (SocketException e) {e.printStackTrace();}
+
+
+        }).start();
+    }
 
     // primeira fase defenir os vizinhos
     private void requestVizinhos() throws IOException{
@@ -228,4 +326,48 @@ public class Node {
         }
     }
 
+    // medir o tempo de quanto demora antes de mandar uma mensaguem
+    private void metricas(String ip_vizinho_enviou){
+
+        // verificar se todos os meus vizinhos estão preparados para pode-mos mandar mensaguens
+        if(this.estados_de_vizinhos.values().stream().allMatch(value -> value.equals("ok"))) {
+
+            for (String ip: this.vizinhos.keySet()){
+
+                if(!ip.equals(ip_vizinho_enviou)){
+                    new Thread(() -> {
+                        Socket vizinho = null;
+                        PrintWriter escritor = null;
+
+                        try {
+                            vizinho = new Socket(this.ip, this.vizinhos.get(ip));
+                            escritor = new PrintWriter(vizinho.getOutputStream(), true);
+
+                            // medir o tempo inicial
+                            long tempo_ini = System.currentTimeMillis();
+                            escritor.println(this.ip+"-metricas?/"+ip_vizinho_enviou);
+                            try {
+                                l_lantencia.lock();
+                                latencia.put(ip,tempo_ini);
+                            }finally {l_lantencia.unlock();}
+
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        } finally {
+                            try {
+                                if (escritor != null) escritor.close();
+                                if (vizinho != null) vizinho.close();
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }).start();
+                }
+            }
+        }
+
+        else System.out.println("Erro!!!!");
+    }
+
+  private void sendStream(){}
 }
