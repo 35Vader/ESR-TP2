@@ -9,8 +9,8 @@ public class RendezvousPoint extends Node {
 
     private final List<Node> nosIntermedios;
 
-    public RendezvousPoint(String ip, int porta, int portaBootstraper) throws IOException {
-        super(ip, porta, portaBootstraper);
+    public RendezvousPoint(String ip, int porta, int portaBootstraper, int portaStreams) throws IOException {
+        super(ip, porta, portaBootstraper, portaStreams);
         this.nosIntermedios = new ArrayList<>();
     }
 
