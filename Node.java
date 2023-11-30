@@ -341,9 +341,11 @@ public class Node {
                                         break;
 
                                     case "Acabou":
+                                        //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc"
                                         this.Stremar = false;
-                                        // acabar
-                                        acabouVizinhos(ip);
+                                        String ip_a_enviar = QuemEnviar(mensagem_split[1]);
+                                        // acabar com as threads ainda não fiz isso
+                                        sendAcabou(ip_a_enviar,mensagem_split[1]);
                                         break;
 
                                     default:
@@ -510,44 +512,29 @@ public class Node {
 
     }
 
-    private void acabouVizinhos(String ip_vizinho_enviou) throws IOException {
-        // verificar se todos os meus vizinhos estão preparados para pode-mos mandar mensaguens
-        if (this.estados_de_vizinhos.values().stream().allMatch(value -> value.equals("ok"))) {
+    private void sendAcabou(String ip_do_vizinho_a_enviar,String arvore_a_desativar) throws IOException {
 
-            for (String ip : this.vizinhos.keySet()) {
+        Socket vizinho_a_enviar;
+        PrintWriter escritor;
+        int porta_vizinho;
+        try {
+            l_vizinhos.lock();
+            porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
+        } finally {
+            l_vizinhos.unlock();
+        }
 
-                if (!ip.equals(ip_vizinho_enviou)) {
-                    new Thread(() -> {
-                        Socket vizinho = null;
-                        PrintWriter escritor = null;
+        vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
+        escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
 
-                        try {
-                            vizinho = new Socket(this.ip, this.vizinhos.get(ip));
-                            escritor = new PrintWriter(vizinho.getOutputStream(), true);
+        escritor.println(this.ip + "-Acabou/" + arvore_a_desativar);
 
-                            // medir o tempo inicial
-                            long tempo_ini = System.currentTimeMillis();
-                            escritor.println(this.ip + "-Acabou/");
-                            try {
-                                l_lantencia.lock();
-                                latencia.put(ip, tempo_ini);
-                            } finally {
-                                l_lantencia.unlock();
-                            }
+        try {
+            escritor.close();
+            vizinho_a_enviar.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        } finally {
-                            try {
-                                if (escritor != null) escritor.close();
-                                if (vizinho != null) vizinho.close();
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                    }).start();
-                }
-            }
-        } else System.out.println("Erro!!!!");
     }
 }
