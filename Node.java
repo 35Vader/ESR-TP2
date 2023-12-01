@@ -678,7 +678,7 @@ public class Node {
         }
 
     }
-    
+
     private void  sendArvoreAtualisada(String ip_do_vizinho_a_enviar, String arvore_ativa) throws IOException {
 
         Socket vizinho_a_enviar;
