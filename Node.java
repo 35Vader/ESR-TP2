@@ -63,7 +63,7 @@ public class Node {
     // ip vizinhos que quero medir as latencia -> tempo que mandei a mensaguem
     private final HashMap<String, Long> latencia = new HashMap<>();
 
-    // id da arvore-> [ip_de_quem-eu_quero_enviar, arvore_completa]
+    // id da arvore-> [ip_de_quem-eu_quero_enviar em BottomUp, arvore_completa]
     private final HashMap<Integer, String[]> arvores_completas = new HashMap<>();
 
     // Construtor
@@ -84,20 +84,55 @@ public class Node {
         okVizinhos();
     }
 
-    private Integer GetLatencia(String arvore) {
+    private void AtualizaArvores(String ip_quem_me_enviou_top_down, String arvore_atualizada){
+        for (Integer i: this.arvores_completas.keySet()){
+            if(this.arvores_completas.get(i)[0].equals(ip_quem_me_enviou_top_down)){
+                this.arvores_completas.get(i)[1] = arvore_atualizada;
+            }
+
+        }
+    }
+
+    private static String joinArray(String[] array) {
+        StringBuilder result = new StringBuilder();
+
+        for (int i = 0; i < array.length; i++) {
+            result.append(array[i]);
+
+            if (i < array.length - 1) {
+                // Adiciona um ponto de exclamação (!) entre os elementos, exceto no último
+                result.append("!");
+            }
+        }
+
+        return result.toString();
+    }
+
+    private String Atualiza(Long novaLatencia, String arvore_a_atualizar){
+        String[] caminhos = arvore_a_atualizar.split("!");
+        for (String s : caminhos) {
+
+            String[] partes = s.split(",");
+            if (partes[0].equals(this.ip)) { partes[1] = novaLatencia.toString();break;}
+        }
+
+        return  joinArray(caminhos);
+    }
+
+    private Long GetLatencia(String arvore) {
         // Divida a string usando delimitadores
         String[] partes = arvore.split("[,!]");
 
-        int soma = 0;
+        long soma = 0;
 
         // Itere sobre as partes e some os valores numéricos
         for (int i = 1; i < partes.length; i += 3) {
-            soma += Integer.parseInt(partes[i]);
+            soma += Long.parseLong(partes[i]);
         }
         return soma;
     }
 
-    private int mini(Integer[] array) {
+    private int mini(Long[] array) {
         // Inicializa o índice mínimo como 0
         int indiceMinimo = 0;
 
@@ -111,7 +146,7 @@ public class Node {
     }
 
     private String ChooseTree() {
-        Integer[] latencias_totais = new Integer[this.arvores_completas.size()];
+        Long[] latencias_totais = new Long[this.arvores_completas.size()];
 
         for (Integer i : this.arvores_completas.keySet()) {
             latencias_totais[i - 1] = GetLatencia(this.arvores_completas.get(i)[1]);
@@ -307,17 +342,19 @@ public class Node {
                                         break;
 
                                     case "Arvore":
+                                        String ip_enviar3;
                                         try {
                                             // Rp tem este ip 121.191.51.101
                                             //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc"
                                             l_arvores_completas.lock();
-                                            String ip_enviar = QuemEnviarBottomUp(mensagem_split[1]);
+                                            ip_enviar3 = QuemEnviarBottomUp(mensagem_split[1]);
                                             int key = this.arvores_completas.size() + 1;
-                                            String[] temp = {ip_enviar, mensagem_split[1]};
+                                            String[] temp = {ip_enviar3, mensagem_split[1]};
                                             this.arvores_completas.put(key, temp);
                                         } finally {
                                             l_arvores_completas.unlock();
                                         }
+                                        sendArvore(ip_enviar3,mensagem_split[1]);
                                         break;
 
                                     case "Stream?":
@@ -344,8 +381,11 @@ public class Node {
                                         break;
 
                                     case "Stream":
+                                        //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa
                                         this.Stremar = true;
-                                        servidor_stream(ip);
+                                        String ip_a_enviar2 = QuemEnviarBottomUp(mensagem_split[1]);
+                                        servidor_stream(ip_a_enviar2);
+                                        sendSream(ip_a_enviar2,mensagem_split[1]);
                                         break;
 
                                     case "Acabou":
@@ -365,8 +405,9 @@ public class Node {
                                     case "Atualisa":
                                         escritor_vizinho.println(this.ip + "-Atualizei/" + mensagem_split[1]);
                                         break;
-                                    case "Atualizei":
 
+                                    case "Atualizei":
+                                        //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa atualizada até mim imclusive
                                         long tempo_fim1 = System.currentTimeMillis();
                                         long latencia1;
                                         try {
@@ -379,6 +420,23 @@ public class Node {
 
                                         escritor_vizinho.println(this.ip + "-Atualiza?/" + arvore_atualizada1);
                                         break;
+
+                                    case "ArvoreAtualizada":
+                                        //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa atualizada totalmente
+                                        try {
+                                            // Rp tem este ip 121.191.51.101
+                                            //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc"
+                                            l_arvores_completas.lock();
+                                            AtualizaArvores(ip, mensagem_split[1]);
+                                        } finally {
+                                            l_arvores_completas.unlock();
+                                        }
+                                        String ip_enviar4 = QuemEnviarTopDown(mensagem_split[1]);
+
+                                        sendArvoreAtualisada(ip_enviar4,mensagem_split[1]);
+                                        break;
+
+
                                     default:
                                         System.out.println("Mensagem inválida");
                                 }
@@ -569,6 +627,85 @@ public class Node {
 
     }
 
+    private void sendSream(String ip_do_vizinho_a_enviar,String arvore_a_desativar) throws IOException {
+
+        Socket vizinho_a_enviar;
+        PrintWriter escritor;
+        int porta_vizinho;
+        try {
+            l_vizinhos.lock();
+            porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
+        } finally {
+            l_vizinhos.unlock();
+        }
+
+        vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
+        escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
+
+        escritor.println(this.ip + "-Stream/" + arvore_a_desativar);
+
+        try {
+            escritor.close();
+            vizinho_a_enviar.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    private void sendArvore(String ip_do_vizinho_a_enviar, String arvore_ativa) throws IOException {
+
+        Socket vizinho_a_enviar;
+        PrintWriter escritor;
+        int porta_vizinho;
+        try {
+            l_vizinhos.lock();
+            porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
+        } finally {
+            l_vizinhos.unlock();
+        }
+
+        vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
+        escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
+
+        escritor.println(this.ip + "-Arvore/" + arvore_ativa);
+
+        try {
+            escritor.close();
+            vizinho_a_enviar.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+    
+    private void  sendArvoreAtualisada(String ip_do_vizinho_a_enviar, String arvore_ativa) throws IOException {
+
+        Socket vizinho_a_enviar;
+        PrintWriter escritor;
+        int porta_vizinho;
+        try {
+            l_vizinhos.lock();
+            porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
+        } finally {
+            l_vizinhos.unlock();
+        }
+
+        vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
+        escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
+
+        escritor.println(this.ip + "-ArvoreAtualizada/" + arvore_ativa);
+
+        try {
+            escritor.close();
+            vizinho_a_enviar.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+
     private void requestLatencia(String ip_do_vizinho_a_enviar, String arvore_a_atualizar) throws IOException {
 
         Socket vizinho_a_enviar;
@@ -595,8 +732,6 @@ public class Node {
         } finally {
             l_lantencia.unlock();
         }
-
-
 
         try {
             escritor.close();
