@@ -2,8 +2,6 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 // Momento em que foi pode ter diferenção congestionamento de rede
 // Fluxo pode vir de modes diferentes
@@ -121,18 +119,29 @@ public class Node {
         return this.arvores_completas.get(mini(latencias_totais))[0];
     }
 
-    private String QuemEnviar(String arvore) {
-        String ipAddressPattern = "\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b" + this.ip;
-        String ipenviar = "";
-        Pattern pattern = Pattern.compile(ipAddressPattern);
-        Matcher matcher = pattern.matcher(arvore);
+    public String QuemEnviarBottomUp(String arvore) {
+        String[] caminhos = arvore.split("!");
+        String res = "";
+        for (String s : caminhos) {
 
-        if (matcher.find()) {
-            ipenviar = matcher.group();
+            String[] partes = s.split(",");
+            if (partes[0].equals(this.ip)) { res = partes[2];break;
+            }
         }
-
-        return ipenviar;
+        return res;
     }
+
+    public String QuemEnviarTopDown(String arvore) {
+        String[] caminhos = arvore.split("!");
+        String res = "";
+        for (String s : caminhos) {
+
+            String[] partes = s.split(",");
+            if (partes[2].equals(this.ip)) { res = partes[0]; break; }
+        }
+        return res;
+    }
+
 
     private void SmartPut(String ip, String mensagem, HashMap<String, ArrayList<String>> fila) {
         ArrayList<String> temp;
@@ -302,14 +311,13 @@ public class Node {
                                             // Rp tem este ip 121.191.51.101
                                             //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc"
                                             l_arvores_completas.lock();
-                                            String ip_enviar = QuemEnviar(mensagem_split[1]);
+                                            String ip_enviar = QuemEnviarBottomUp(mensagem_split[1]);
                                             int key = this.arvores_completas.size() + 1;
                                             String[] temp = {ip_enviar, mensagem_split[1]};
                                             this.arvores_completas.put(key, temp);
                                         } finally {
                                             l_arvores_completas.unlock();
                                         }
-                                        // algo é lançado para atualizar métricas
                                         break;
 
                                     case "Stream?":
@@ -341,13 +349,36 @@ public class Node {
                                         break;
 
                                     case "Acabou":
-                                        //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc"
+                                        //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa
                                         this.Stremar = false;
-                                        String ip_a_enviar = QuemEnviar(mensagem_split[1]);
+                                        String ip_a_enviar = QuemEnviarTopDown(mensagem_split[1]);
                                         // acabar com as threads ainda não fiz isso
                                         sendAcabou(ip_a_enviar,mensagem_split[1]);
                                         break;
 
+                                    case "Atualiza?":
+                                        //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa atualizada até mim
+                                        String ip_a_enviar1 = QuemEnviarBottomUp(mensagem_split[1]);
+                                        requestLatencia(ip_a_enviar1,mensagem_split[1]);
+                                        break;
+
+                                    case "Atualisa":
+                                        escritor_vizinho.println(this.ip + "-Atualizei/" + mensagem_split[1]);
+                                        break;
+                                    case "Atualizei":
+
+                                        long tempo_fim1 = System.currentTimeMillis();
+                                        long latencia1;
+                                        try {
+                                            l_lantencia.lock();
+                                            latencia1 = tempo_fim1 - this.latencia.get(ip);
+                                        } finally {
+                                            l_lantencia.unlock();
+                                        }
+                                        String arvore_atualizada1 = Atualiza(latencia1, mensagem_split[1]);
+
+                                        escritor_vizinho.println(this.ip + "-Atualiza?/" + arvore_atualizada1);
+                                        break;
                                     default:
                                         System.out.println("Mensagem inválida");
                                 }
@@ -528,6 +559,44 @@ public class Node {
         escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
 
         escritor.println(this.ip + "-Acabou/" + arvore_a_desativar);
+
+        try {
+            escritor.close();
+            vizinho_a_enviar.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    private void requestLatencia(String ip_do_vizinho_a_enviar, String arvore_a_atualizar) throws IOException {
+
+        Socket vizinho_a_enviar;
+        PrintWriter escritor;
+        int porta_vizinho;
+        try {
+            l_vizinhos.lock();
+            porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
+        } finally {
+            l_vizinhos.unlock();
+        }
+
+        vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
+        escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
+
+        // medir o tempo inicial
+        long tempo_ini = System.currentTimeMillis();
+
+        escritor.println(this.ip + "-Atualiza/" + arvore_a_atualizar);
+
+        try {
+            l_lantencia.lock();
+            latencia.put(ip, tempo_ini);
+        } finally {
+            l_lantencia.unlock();
+        }
+
+
 
         try {
             escritor.close();
