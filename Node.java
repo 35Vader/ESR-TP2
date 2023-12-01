@@ -260,6 +260,7 @@ public class Node {
                         PrintWriter escritor_vizinho = new PrintWriter(escritor.getOutputStream());
                         while (true) {
                             if (!this.fila_de_espera.values().isEmpty()) {
+                                Thread t1 = null;
                                 String mensagem;
                                 String ip;
                                 try {
@@ -377,14 +378,18 @@ public class Node {
                                             } finally {
                                                 l_arvores_completas.unlock();
                                             }
-                                        } else servidor_stream(ip);
+                                        } else {
+                                            t1 = new Thread(() -> servidor_stream(ip));
+                                            t1.start();
+                                        }
                                         break;
 
                                     case "Stream":
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa
                                         this.Stremar = true;
                                         String ip_a_enviar2 = QuemEnviarBottomUp(mensagem_split[1]);
-                                        servidor_stream(ip_a_enviar2);
+                                        t1 = new Thread(() -> servidor_stream(ip_a_enviar2));
+                                        t1.start();
                                         sendSream(ip_a_enviar2,mensagem_split[1]);
                                         break;
 
@@ -392,7 +397,7 @@ public class Node {
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa
                                         this.Stremar = false;
                                         String ip_a_enviar = QuemEnviarTopDown(mensagem_split[1]);
-                                        // acabar com as threads ainda não fiz isso
+                                        t1.interrupt();
                                         sendAcabou(ip_a_enviar,mensagem_split[1]);
                                         break;
 
@@ -455,7 +460,6 @@ public class Node {
 
 
     private void servidor_stream(String ip_vizinho) {
-        new Thread(() -> {
             try (DatagramSocket socket = new DatagramSocket(this.porta_strems)) {
                 try {
                     byte[] receiveData = new byte[1024];
@@ -481,7 +485,6 @@ public class Node {
             } catch (SocketException e) {
                 e.printStackTrace();
             }
-        }).start();
     }
 
     // primeira fase defenir os vizinhos
