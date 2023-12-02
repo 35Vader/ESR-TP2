@@ -80,8 +80,6 @@ public class Node {
         servidor();
         //primeira fase
         requestVizinhos();
-        // segunda fase
-        okVizinhos();
     }
 
     private void AtualizaArvores(String ip_quem_me_enviou_top_down, String arvore_atualizada){
@@ -300,6 +298,8 @@ public class Node {
                                             l_vizinhos.unlock();
                                             l_vizinhos_udp.unlock();
                                         }
+                                        // segunda fase
+                                        okVizinhos();
                                         break;
 
                                     case "metricas?":
@@ -509,31 +509,32 @@ public class Node {
 
     //fase para ver se os vizinhos estão ok
     private void okVizinhos() {
-        for (String ip : vizinhos.keySet()) {
 
-            new Thread(() -> {
-                Socket vizinho = null;
-                PrintWriter escritor = null;
+            for (String ip : vizinhos.keySet()) {
 
-                try {
-                    vizinho = new Socket(this.ip, this.vizinhos.get(ip));
-                    escritor = new PrintWriter(vizinho.getOutputStream(), true);
+                new Thread(() -> {
+                    Socket vizinho = null;
+                    PrintWriter escritor = null;
 
-                    escritor.println(this.ip + "-ok?/");
-
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } finally {
                     try {
-                        if (escritor != null) escritor.close();
-                        if (vizinho != null) vizinho.close();
+                        vizinho = new Socket(this.ip, this.vizinhos.get(ip));
+                        escritor = new PrintWriter(vizinho.getOutputStream(), true);
+
+                        escritor.println(this.ip + "-ok?/");
+
                     } catch (IOException e) {
                         e.printStackTrace();
+                    } finally {
+                        try {
+                            if (escritor != null) escritor.close();
+                            if (vizinho != null) vizinho.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
                     }
-                }
-            }).start();
+                }).start();
+            }
         }
-    }
 
     // medir o tempo de quanto demora antes de mandar uma mensaguem
     private void metricas(String ip_vizinho_enviou) {
@@ -583,12 +584,8 @@ public class Node {
         Socket vizinho_a_enviar;
         PrintWriter escritor;
         int porta_vizinho;
-        try {
-            l_vizinhos.lock();
-            porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
-        } finally {
-            l_vizinhos.unlock();
-        }
+
+        porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
 
         vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
         escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
@@ -608,13 +605,7 @@ public class Node {
 
         Socket vizinho_a_enviar;
         PrintWriter escritor;
-        int porta_vizinho;
-        try {
-            l_vizinhos.lock();
-            porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
-        } finally {
-            l_vizinhos.unlock();
-        }
+        int porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
 
         vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
         escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
@@ -634,13 +625,7 @@ public class Node {
 
         Socket vizinho_a_enviar;
         PrintWriter escritor;
-        int porta_vizinho;
-        try {
-            l_vizinhos.lock();
-            porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
-        } finally {
-            l_vizinhos.unlock();
-        }
+        int porta_vizinho= this.vizinhos.get(ip_do_vizinho_a_enviar);
 
         vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
         escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
@@ -660,13 +645,7 @@ public class Node {
 
         Socket vizinho_a_enviar;
         PrintWriter escritor;
-        int porta_vizinho;
-        try {
-            l_vizinhos.lock();
-            porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
-        } finally {
-            l_vizinhos.unlock();
-        }
+        int porta_vizinho= this.vizinhos.get(ip_do_vizinho_a_enviar);
 
         vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
         escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
@@ -686,13 +665,7 @@ public class Node {
 
         Socket vizinho_a_enviar;
         PrintWriter escritor;
-        int porta_vizinho;
-        try {
-            l_vizinhos.lock();
-            porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
-        } finally {
-            l_vizinhos.unlock();
-        }
+        int porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
 
         vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
         escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
@@ -713,13 +686,7 @@ public class Node {
 
         Socket vizinho_a_enviar;
         PrintWriter escritor;
-        int porta_vizinho;
-        try {
-            l_vizinhos.lock();
-            porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
-        } finally {
-            l_vizinhos.unlock();
-        }
+        int porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
 
         vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
         escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
