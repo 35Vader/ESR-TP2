@@ -254,8 +254,6 @@ public class Node {
                 // uma especie de capataz
                 new Thread(() -> {
                     try {
-                        Socket escritor = ouvinte_mestre.accept();
-                        PrintWriter escritor_vizinho = new PrintWriter(escritor.getOutputStream());
                         while (true) {
                             if (!this.fila_de_espera.values().isEmpty()) {
                                 Thread t1 = null;
@@ -276,7 +274,8 @@ public class Node {
                                 switch (mensagem_split[0]) {
 
                                     case "ok?":
-                                        escritor_vizinho.println(this.ip + "-ok/");
+                                        // digo o meu estado ao vizinho que me enviou
+                                        escritor_vizinho(ip,this.ip + "-ok/");
                                         break;
 
                                     case "ok":
@@ -303,12 +302,13 @@ public class Node {
                                         break;
 
                                     case "metricas?":
-                                        escritor_vizinho.println(this.ip + "-metrica/" + mensagem_split[1]);
+                                        // envio uma mensagem metrica para o vizinho que me pediu para medir as métricas
+                                        escritor_vizinho(ip, this.ip + "-metrica/" + mensagem_split[1]);
                                         break;
 
                                     case "metrica":
                                         // parar o timer para o ip, manda mensaguem Arvore para este vizinho com
-                                        long tempo_fim = System.currentTimeMillis();
+                                        long tempo_fim = System.currentTimeMillis(); // medição da latencia em roudtrip
                                         long latencia;
                                         String arvore_atualizada;
                                         try {
@@ -326,7 +326,8 @@ public class Node {
                                         } finally {
                                             l_mensagem.unlock();
                                         }
-                                        escritor_vizinho.println(this.ip + "-Arvore?/" + arvore_atualizada);
+                                        // propagar o flow para a construção de arvores de forma top down
+                                        escritor_vizinho(ip, this.ip + "-Arvore?/" + arvore_atualizada);
                                         break;
 
                                     case "Arvore?":
@@ -355,7 +356,7 @@ public class Node {
                                         } finally {
                                             l_arvores_completas.unlock();
                                         }
-                                        sendArvore(ip_enviar3,mensagem_split[1]);
+                                        sendArvoreAtiva(ip_enviar3,mensagem_split[1]);
                                         break;
 
                                     case "Stream?":
@@ -363,6 +364,14 @@ public class Node {
                                             try {
                                                 l_arvores_completas.lock();
                                                 if (this.arvores_completas.isEmpty()) {
+
+                                                    try {
+                                                        l_mensagem.lock();
+                                                       this.mensagem.put(ip,mensagem_split[1]);
+                                                    } finally {
+                                                        l_mensagem.unlock();
+                                                    }
+
                                                     metricas(ip);
                                                 } else {
 
@@ -408,7 +417,7 @@ public class Node {
                                         break;
 
                                     case "Atualisa":
-                                        escritor_vizinho.println(this.ip + "-Atualizei/" + mensagem_split[1]);
+                                        escritor_vizinho(ip,this.ip + "-Atualizei/" + mensagem_split[1]);
                                         break;
 
                                     case "Atualizei":
@@ -422,8 +431,7 @@ public class Node {
                                             l_lantencia.unlock();
                                         }
                                         String arvore_atualizada1 = Atualiza(latencia1, mensagem_split[1]);
-
-                                        escritor_vizinho.println(this.ip + "-Atualiza?/" + arvore_atualizada1);
+                                        escritor_vizinho(ip,this.ip + "-Atualiza?/" + arvore_atualizada1);
                                         break;
 
                                     case "ArvoreAtualizada":
@@ -493,7 +501,7 @@ public class Node {
         Socket bootstraper;
         PrintWriter escritor;
 
-        bootstraper = new Socket(ip, porta_bootstraper);
+        bootstraper = new Socket("localhost", porta_bootstraper);
         escritor = new PrintWriter(bootstraper.getOutputStream(), true);
 
         escritor.println(this.ip + "-" + "Vizinhos/");
@@ -517,7 +525,7 @@ public class Node {
                     PrintWriter escritor = null;
 
                     try {
-                        vizinho = new Socket(this.ip, this.vizinhos.get(ip));
+                        vizinho = new Socket("localhost", this.vizinhos.get(ip));
                         escritor = new PrintWriter(vizinho.getOutputStream(), true);
 
                         escritor.println(this.ip + "-ok?/");
@@ -550,7 +558,7 @@ public class Node {
                         PrintWriter escritor = null;
 
                         try {
-                            vizinho = new Socket(this.ip, this.vizinhos.get(ip));
+                            vizinho = new Socket("localhost", this.vizinhos.get(ip));
                             escritor = new PrintWriter(vizinho.getOutputStream(), true);
 
                             // medir o tempo inicial
@@ -579,6 +587,29 @@ public class Node {
         } else System.out.println("Erro!!!!");
     }
 
+
+    private  void  escritor_vizinho(String ip_do_vizinho_a_enviar, String mensagem)throws IOException{
+
+        Socket vizinho_a_enviar;
+        PrintWriter escritor;
+        int porta_vizinho;
+
+        porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
+
+        vizinho_a_enviar = new Socket("localhost", porta_vizinho);
+        escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
+
+        escritor.println(mensagem);
+
+        try {
+            escritor.close();
+            vizinho_a_enviar.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
     private void sendTree(String ip_do_vizinho_a_enviar) throws IOException {
 
         Socket vizinho_a_enviar;
@@ -587,7 +618,7 @@ public class Node {
 
         porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
 
-        vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
+        vizinho_a_enviar = new Socket("localhost", porta_vizinho);
         escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
 
         escritor.println(this.ip + "-Stream?/");
@@ -607,7 +638,7 @@ public class Node {
         PrintWriter escritor;
         int porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
 
-        vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
+        vizinho_a_enviar = new Socket("localhost", porta_vizinho);
         escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
 
         escritor.println(this.ip + "-Acabou/" + arvore_a_desativar);
@@ -627,7 +658,7 @@ public class Node {
         PrintWriter escritor;
         int porta_vizinho= this.vizinhos.get(ip_do_vizinho_a_enviar);
 
-        vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
+        vizinho_a_enviar = new Socket("localhost", porta_vizinho);
         escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
 
         escritor.println(this.ip + "-Stream/" + arvore_a_desativar);
@@ -641,13 +672,13 @@ public class Node {
 
     }
 
-    private void sendArvore(String ip_do_vizinho_a_enviar, String arvore_ativa) throws IOException {
+    private void sendArvoreAtiva(String ip_do_vizinho_a_enviar, String arvore_ativa) throws IOException {
 
         Socket vizinho_a_enviar;
         PrintWriter escritor;
         int porta_vizinho= this.vizinhos.get(ip_do_vizinho_a_enviar);
 
-        vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
+        vizinho_a_enviar = new Socket("localhost", porta_vizinho);
         escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
 
         escritor.println(this.ip + "-Arvore/" + arvore_ativa);
@@ -667,7 +698,7 @@ public class Node {
         PrintWriter escritor;
         int porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
 
-        vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
+        vizinho_a_enviar = new Socket("localhost", porta_vizinho);
         escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
 
         escritor.println(this.ip + "-ArvoreAtualizada/" + arvore_ativa);
@@ -688,7 +719,7 @@ public class Node {
         PrintWriter escritor;
         int porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
 
-        vizinho_a_enviar = new Socket(this.ip, porta_vizinho);
+        vizinho_a_enviar = new Socket("localhost", porta_vizinho);
         escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
 
         // medir o tempo inicial

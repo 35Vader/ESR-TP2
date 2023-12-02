@@ -9,7 +9,7 @@ public class Cliente {
     private final String ip;
 
     // flag de estar a receber stream ou não
-    private boolean ReceberStream = false;
+    private boolean ReceberStream;
 
     // porta que é a porta do meu node
     private final int porta_do_node_folha;
@@ -34,6 +34,8 @@ public class Cliente {
     // ip_de_quem-eu_quero_enviar em TopDown -> ( arvore_completa, estado de ativação )
     private final HashMap<String, ArvoreEstado> arvores_completas = new HashMap<>();
 
+    private long latencia;
+
     public Cliente(String ip, int porta_do_node_folha, String ip_do_node_folha, int porta_strems, int porta){
         this.ip = ip;
         this.porta_do_node_folha = porta_do_node_folha;
@@ -42,7 +44,7 @@ public class Cliente {
         this.porta = porta;
     }
 
-    private class ArvoreEstado {
+    private static class ArvoreEstado {
         private String arvore;
         private boolean estado;
 
@@ -159,6 +161,12 @@ public class Cliente {
 
                                 switch (mensagem_split[0]) {
 
+                                    case "metrica":
+                                        this.latencia -= System.currentTimeMillis();
+                                        String nova_arvore =  this.ip + this.latencia + ip;
+                                        escritor_vizinho.println(this.ip + "-" + "Stream?/" + nova_arvore);
+                                        break;
+
                                     case "Arvore":
                                         try {
                                             // Rp tem este ip 121.191.51.101
@@ -249,8 +257,12 @@ public class Cliente {
 
         bootstraper = new Socket(ip, porta_do_node_folha);
         escritor = new PrintWriter(bootstraper.getOutputStream(), true);
+        if(!this.arvores_completas.get(ip_do_node_folha).getEstado()){
 
-        escritor.println(this.ip + "-" + "Stream?/");
+            this.latencia = System.currentTimeMillis();
+            escritor.println(this.ip + "-" + "metricas?/" );
+        }
+        else escritor.println(this.ip + "-" + "Stream?/");
 
         try {
             escritor.close();

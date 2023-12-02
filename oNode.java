@@ -32,10 +32,13 @@ public class oNode {
 
                     while (true) {
                         Socket clienteSocket = servidorSocket.accept();
+                        InetAddress enderecoCliente = clienteSocket.getInetAddress();
+                        String ipCliente = enderecoCliente.getHostAddress();
+                        System.out.println("ip é = " + ipCliente);
                         System.out.println("Conexão estabelecida com um cliente.");
-
                         // Configuração do leitor e do escritor para o cliente
                         BufferedReader leitor = new BufferedReader(new InputStreamReader(clienteSocket.getInputStream()));
+
                         PrintWriter escritor = new PrintWriter(clienteSocket.getOutputStream(), true);
 
                         // Thread para leitura de mensagens do cliente (entrada)
