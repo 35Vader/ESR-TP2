@@ -57,7 +57,7 @@ public class Node {
     // ip -> "ok" ou ""
     private final HashMap<String, String> estados_de_vizinhos = new HashMap<>();
 
-    //ip do que me enviou Arvore? -> mensegagem que me enviou
+    //ip do que me enviou Arvore? -> arvore incompleta
     private final HashMap<String, String> mensagem = new HashMap<>();
 
     // ip vizinhos que quero medir as latencia -> tempo que mandei a mensaguem
@@ -346,7 +346,7 @@ public class Node {
                                         String ip_enviar3;
                                         try {
                                             // Rp tem este ip 121.191.51.101
-                                            //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc"
+                                            //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore escolhida pelo RP
                                             l_arvores_completas.lock();
                                             ip_enviar3 = QuemEnviarBottomUp(mensagem_split[1]);
                                             int key = this.arvores_completas.size() + 1;
@@ -394,7 +394,7 @@ public class Node {
                                         break;
 
                                     case "Acabou":
-                                        //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa
+                                        //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore  a desativar
                                         this.Stremar = false;
                                         String ip_a_enviar = QuemEnviarTopDown(mensagem_split[1]);
                                         t1.interrupt();
@@ -458,7 +458,7 @@ public class Node {
         });
     }
 
-
+    // recetor e propagador de strems
     private void servidor_stream(String ip_vizinho) {
             try (DatagramSocket socket = new DatagramSocket(this.porta_strems)) {
                 try {
