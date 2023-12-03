@@ -45,6 +45,9 @@ public class Node {
     // lock da lista dos estados dos vizinhos
     private final ReentrantLock l_ok = new ReentrantLock();
 
+    // loock da lista de threads
+    private final ReentrantLock l_thread = new ReentrantLock();
+
     // ip->porta_tcp
     private final HashMap<String, Integer> vizinhos = new HashMap<>();
 
@@ -66,6 +69,9 @@ public class Node {
     // id da arvore-> [ip_de_quem-eu_quero_enviar em BottomUp, arvore_completa]
     private final HashMap<Integer, String[]> arvores_completas = new HashMap<>();
 
+    // ip -> Thread a interromper
+    private final HashMap<String, Thread> lista_threads = new HashMap<>();
+
     // Construtor
     public Node(String ip, int porta, int porta_bootstraper, int porta_strems){
 
@@ -78,8 +84,13 @@ public class Node {
     public void inicializa() throws IOException {
         // preparar servidor
         servidor();
+        // spleep ??
         //primeira fase
         requestVizinhos();
+        // spleep ??
+        // segunda fase
+        okVizinhos();
+
     }
 
     private void AtualizaArvores(String ip_quem_me_enviou_top_down, String arvore_atualizada){
@@ -230,10 +241,11 @@ public class Node {
                 // Thread para leitura de mensagens de todos os seus vizinhos
                 new Thread(() -> {
                     try {
-                        Socket ouvinte = ouvinte_mestre.accept();
-                        BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
                         String mensagem;
                         while (true) {
+                            Socket ouvinte = ouvinte_mestre.accept();
+                            BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
+
                             //ip-tipo/mensg
                             mensagem = leitor_vizinho.readLine();
                             // [ip,tipo/mensg]
@@ -256,7 +268,6 @@ public class Node {
                     try {
                         while (true) {
                             if (!this.fila_de_espera.values().isEmpty()) {
-                                Thread t1 = null;
                                 String mensagem;
                                 String ip;
                                 try {
@@ -297,8 +308,6 @@ public class Node {
                                             l_vizinhos.unlock();
                                             l_vizinhos_udp.unlock();
                                         }
-                                        // segunda fase
-                                        okVizinhos();
                                         break;
 
                                     case "metricas?":
@@ -322,7 +331,7 @@ public class Node {
                                         try {
                                             l_mensagem.lock();
                                             String arvore = this.mensagem.get(mensagem_split[1]);
-                                            arvore_atualizada = arvore + "!" + this.ip + latencia + ip;
+                                            arvore_atualizada = arvore + "!" + this.ip + "," + latencia + "," + ip;
                                         } finally {
                                             l_mensagem.unlock();
                                         }
@@ -388,7 +397,11 @@ public class Node {
                                                 l_arvores_completas.unlock();
                                             }
                                         } else {
-                                            t1 = new Thread(() -> servidor_stream(ip));
+                                           Thread t1 = new Thread(() -> servidor_stream(ip));
+                                            try {
+                                                l_thread.lock();
+                                                lista_threads.put(ip,t1);
+                                            }finally {l_thread.unlock();}
                                             t1.start();
                                         }
                                         break;
@@ -397,7 +410,11 @@ public class Node {
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa
                                         this.Stremar = true;
                                         String ip_a_enviar2 = QuemEnviarBottomUp(mensagem_split[1]);
-                                        t1 = new Thread(() -> servidor_stream(ip_a_enviar2));
+                                        Thread t1 = new Thread(() -> servidor_stream(ip_a_enviar2));
+                                        try {
+                                            l_thread.lock();
+                                            lista_threads.put(ip,t1);
+                                        }finally {l_thread.unlock();}
                                         t1.start();
                                         sendSream(ip_a_enviar2,mensagem_split[1]);
                                         break;
@@ -406,7 +423,14 @@ public class Node {
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore  a desativar
                                         this.Stremar = false;
                                         String ip_a_enviar = QuemEnviarTopDown(mensagem_split[1]);
-                                        t1.interrupt();
+                                        Thread temp;
+                                        try {
+                                            l_thread.lock();
+                                            temp = lista_threads.get(ip);
+                                        }finally {l_thread.unlock();}
+
+                                        temp.interrupt();
+
                                         sendAcabou(ip_a_enviar,mensagem_split[1]);
                                         break;
 

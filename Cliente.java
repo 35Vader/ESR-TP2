@@ -9,7 +9,7 @@ public class Cliente {
     private final String ip;
 
     // flag de estar a receber stream ou não
-    private boolean ReceberStream;
+    private boolean ReceberStream = true;
 
     // porta que é a porta do meu node
     private final int porta_do_node_folha;
@@ -160,26 +160,24 @@ public class Cliente {
                                 String[] mensagem_split = mensagem.split("/");
 
                                 switch (mensagem_split[0]) {
-
-                                    case "metrica":
+                                    case "metrica" -> {
                                         this.latencia -= System.currentTimeMillis();
-                                        String nova_arvore =  this.ip + this.latencia + ip;
+                                        String nova_arvore = this.ip + "," + this.latencia + "," + ip;
                                         escritor_vizinho.println(this.ip + "-" + "Stream?/" + nova_arvore);
-                                        break;
-
-                                    case "Arvore":
+                                    }
+                                    case "Arvore" -> {
                                         try {
                                             // Rp tem este ip 121.191.51.101
                                             //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore que o RP escolheu
                                             l_arvores_completas.lock();
-                                            ArvoreEstado temp = new ArvoreEstado(mensagem_split[1],false);
-                                            this.arvores_completas.put(ip,temp);
+                                            ArvoreEstado temp = new ArvoreEstado(mensagem_split[1], false);
+                                            this.arvores_completas.put(ip, temp);
                                         } finally {
                                             l_arvores_completas.unlock();
                                         }
-                                        break;
-
-                                    case "Stream":
+                                        this.QueroStream();
+                                    }
+                                    case "Stream" -> {
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa
                                         try {
                                             l_arvores_completas.lock();
@@ -190,9 +188,8 @@ public class Cliente {
                                         this.ReceberStream = true;
                                         t1 = new Thread(this::servidor_stream);
                                         t1.start();
-                                        break;
-
-                                    case "Atualiza?":
+                                    }
+                                    case "Atualiza?" -> {
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa atualizada totalmente
                                         try {
                                             l_arvores_completas.lock();
@@ -201,14 +198,9 @@ public class Cliente {
                                             l_arvores_completas.unlock();
                                         }
                                         escritor_vizinho.println(this.ip + "-ArvoreAtualizada/" + mensagem_split[1]);
-                                        break;
-
-                                    case "Atualiza":
-                                        escritor_vizinho.println(this.ip + "-Atualizei/" + mensagem_split[1]);
-                                        break;
-
-                                    default:
-                                        System.out.println("Mensagem inválida");
+                                    }
+                                    case "Atualiza" -> escritor_vizinho.println(this.ip + "-Atualizei/" + mensagem_split[1]);
+                                    default -> System.out.println("Mensagem inválida");
                                 }
                             }
                         }

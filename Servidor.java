@@ -10,10 +10,6 @@ public class Servidor {
     private String ip;
     private int porta;
 
-    // StreamIP -> StreamEmSi
-    private HashMap<String, String> streams;
-    private ReentrantLock l_stream = new ReentrantLock();
-
     // ip -> [StreamIP; StreamEmSi]
     private ReentrantLock l_pedidos = new ReentrantLock();
     private HashMap<String, String[] > pedidos;

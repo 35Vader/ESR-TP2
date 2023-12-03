@@ -51,6 +51,9 @@ public class Bootstraper {
     // ip->porta_tcp
     private final HashMap<String, Integer> vizinhos;
 
+    // loock da lista de threads
+    private final ReentrantLock l_thread = new ReentrantLock();
+
     //ip->porta_udp
     private final HashMap<String, Integer> vizinhos_udp;
 
@@ -75,6 +78,9 @@ public class Bootstraper {
     // id da arvore-> [ip_de_quem-eu_quero_enviar em BottomUp, arvore_completa]
     private final HashMap<Integer, String[]> arvores_completas = new HashMap<>();
 
+    // ip -> Thread a interromper
+    private final HashMap<String, Thread> lista_threads = new HashMap<>();
+
     // Construtor
     public Bootstraper(String ip, int porta, int porta_strems,
                        HashMap<String,Integer> vizinhos, HashMap<String,Integer> vizinhos_udp,
@@ -97,8 +103,13 @@ public class Bootstraper {
     private String VizinhosMaker(HashMap<String, Integer> topologia, HashMap<String, Integer> topologia_udp) throws NullPointerException{
         // "121.191.51.101:12341:14321, 121.191.52.101:12342:24321"
         StringBuilder vizinhos = null;
+        int i = 0;
         for (String s: topologia.keySet()) {
-            vizinhos.append(s).append(":").append(topologia.get(s)).append(":").append(topologia_udp.get(s));
+            if(i < topologia.size()) vizinhos.append(s).append(":").append(topologia.get(s)).append(":").append(topologia_udp.get(s)).append(",");
+
+            else vizinhos.append(s).append(":").append(topologia.get(s)).append(":").append(topologia_udp.get(s));
+
+            i++;
         }
 
         return vizinhos.toString();
@@ -239,10 +250,13 @@ public class Bootstraper {
                 // Thread para leitura de mensagens de todos os seus vizinhos
                 new Thread(() -> {
                     try {
-                        Socket ouvinte = ouvinte_mestre.accept();
-                        BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
+
                         String mensagem;
                         while (true) {
+
+                            Socket ouvinte = ouvinte_mestre.accept();
+                            BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
+
                             //ip-tipo/mensg
                             mensagem = leitor_vizinho.readLine();
                             // [ip,tipo/mensg]
@@ -265,7 +279,6 @@ public class Bootstraper {
                     try {
                         while (true) {
                             if (!this.fila_de_espera.values().isEmpty()) {
-                                Thread t1 = null;
                                 String mensagem;
                                 String ip;
                                 try {
@@ -334,7 +347,7 @@ public class Bootstraper {
                                         try {
                                             l_mensagem.lock();
                                             String arvore = this.mensagem.get(mensagem_split[1]);
-                                            arvore_atualizada = arvore + "!" + this.ip + latencia + ip;
+                                            arvore_atualizada = arvore + "!" + this.ip + "," + latencia + "," + ip;
                                         } finally {
                                             l_mensagem.unlock();
                                         }
@@ -400,7 +413,11 @@ public class Bootstraper {
                                                 l_arvores_completas.unlock();
                                             }
                                         } else {
-                                            t1 = new Thread(() -> servidor_stream(ip));
+                                            Thread t1 = new Thread(() -> servidor_stream(ip));
+                                            try {
+                                                l_thread.lock();
+                                                lista_threads.put(ip,t1);
+                                            }finally {l_thread.unlock();}
                                             t1.start();
                                         }
                                         break;
@@ -409,7 +426,11 @@ public class Bootstraper {
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa
                                         this.Stremar = true;
                                         String ip_a_enviar2 = QuemEnviarBottomUp(mensagem_split[1]);
-                                        t1 = new Thread(() -> servidor_stream(ip_a_enviar2));
+                                        Thread t1 = new Thread(() -> servidor_stream(ip_a_enviar2));
+                                        try {
+                                            l_thread.lock();
+                                            lista_threads.put(ip,t1);
+                                        }finally {l_thread.unlock();}
                                         t1.start();
                                         sendSream(ip_a_enviar2,mensagem_split[1]);
                                         break;
@@ -418,7 +439,14 @@ public class Bootstraper {
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore  a desativar
                                         this.Stremar = false;
                                         String ip_a_enviar = QuemEnviarTopDown(mensagem_split[1]);
-                                        t1.interrupt();
+                                        Thread temp;
+                                        try {
+                                            l_thread.lock();
+                                            temp = lista_threads.get(ip);
+                                        }finally {l_thread.unlock();}
+
+                                        temp.interrupt();
+
                                         sendAcabou(ip_a_enviar,mensagem_split[1]);
                                         break;
 
