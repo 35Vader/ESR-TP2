@@ -203,7 +203,7 @@ public class Cliente {
                                         escritor_vizinho.println(this.ip + "-ArvoreAtualizada/" + mensagem_split[1]);
                                         break;
 
-                                    case "Atualisa":
+                                    case "Atualiza":
                                         escritor_vizinho.println(this.ip + "-Atualizei/" + mensagem_split[1]);
                                         break;
 

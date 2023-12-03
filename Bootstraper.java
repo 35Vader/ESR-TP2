@@ -428,7 +428,7 @@ public class Bootstraper {
                                         requestLatencia(ip_a_enviar1,mensagem_split[1]);
                                         break;
 
-                                    case "Atualisa":
+                                    case "Atualiza":
                                         escritor_vizinho(ip,this.ip + "-Atualizei/" + mensagem_split[1]);
                                         break;
 
