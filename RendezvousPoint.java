@@ -4,7 +4,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.*;
 
-public class RendezvousPoint extends Node {
+public class RendezvousPoint{
     private final ReentrantLock l_latencia = new ReentrantLock();
     private final AddressingTable addressingTable;
     private AtomicInteger contadorMensagensRecebidas = new AtomicInteger(0);
@@ -13,11 +13,65 @@ public class RendezvousPoint extends Node {
     private final HashMap<String, Long> latenciaClientes = new HashMap<>();
     private final HashMap<String, List<String>> arvoresClientes = new HashMap<>();
     private final static HashMap<String, String> caminhoClientes = new HashMap<>();
+    private final Lock l_filaEspera = new ReentrantLock();
+    private final Map<String, List<String>> filaDeEspera = new HashMap<>();
+    
+    // flag se diz se eu estou a stremar ou não
+    private boolean Stremar = false;
+
+    // ip do Node
+    private final String ip;
+
+    // porta do socket de tcp
+    protected final int porta;
+
+    // porta do socket udp para enviar strems
+    private final int porta_strems;
+
+    // ip->porta_tcp
+    private final HashMap<String, Integer> vizinhos = new HashMap<>();
+
+    //lock das listas de latencias
+    private final ReentrantLock l_lantencia = new ReentrantLock();
+
+    // lock da lista de mensagem de caminhos
+    private final ReentrantLock l_mensagem = new ReentrantLock();
+
+    // lock da lista de vizinhos
+    private final ReentrantLock l_vizinhos = new ReentrantLock();
+
+    // lock da lista de vizinhos
+    private final ReentrantLock l_vizinhos_udp = new ReentrantLock();
+
+    // lock da lista de vizinhos
+    private final ReentrantLock l_arvores_completas = new ReentrantLock();
+
+    //ip->porta_udp
+    private final HashMap<String, Integer> vizinhos_udp = new HashMap<>();
+
+    // lock da lista dos estados dos vizinhos
+    private final ReentrantLock l_ok = new ReentrantLock();
+
+    // ip -> "ok" ou ""
+    private final HashMap<String, String> estados_de_vizinhos = new HashMap<>();
+
+    //ip do que me enviou Arvore? -> arvore incompleta
+    private final HashMap<String, String> mensagem = new HashMap<>();
+
+    // ip vizinhos que quero medir as latencia -> tempo que mandei a mensaguem
+    private final HashMap<String, Long> latencia = new HashMap<>();
+
+    // id da arvore-> [ip_de_quem-eu_quero_enviar em BottomUp, arvore_completa]
+    private final HashMap<Integer, String[]> arvores_completas = new HashMap<>();
+
 
     public RendezvousPoint(String ip, int porta, int porta_bootstraper, int porta_strems, Map<String, String> vizinhos)
             throws IOException {
-        super(ip, porta, porta_bootstraper, porta_strems);
+        super();
         iniciarTimerAtualizacaoArvore();
+        this.ip = ip;
+        this.porta_strems = porta_strems;
+        this.porta = porta;
         addressingTable = new AddressingTable(vizinhos);
         servidor();
         receberStreams();
@@ -31,7 +85,33 @@ public class RendezvousPoint extends Node {
     private void receberMensagemDoCliente(String clienteIP, String mensagem) {
         // Lógica para processar mensagem recebida do cliente
         System.out.println("Recebendo mensagem do cliente " + clienteIP + ": " + mensagem);
-    }    
+    
+        // Adicione a mensagem à fila de espera
+        adicionarMensagemFilaEspera(clienteIP, mensagem);
+    }
+    
+    // Método para adicionar a mensagem à fila de espera
+    private void adicionarMensagemFilaEspera(String clienteIP, String mensagem) {
+        try {
+            // Bloqueia o acesso à fila de espera para evitar conflitos
+            l_filaEspera.lock();
+    
+            // Verifica se o cliente já está na fila
+            if (filaDeEspera.containsKey(clienteIP)) {
+                // Adiciona a mensagem à lista existente
+                filaDeEspera.get(clienteIP).add(mensagem);
+            } else {
+                // Cria uma nova lista de mensagens para o cliente
+                List<String> novaLista = new ArrayList<>();
+                novaLista.add(mensagem);
+                filaDeEspera.put(clienteIP, novaLista);
+            }
+        } finally {
+            // Libera o bloqueio após concluir as operações na fila de espera
+            l_filaEspera.unlock();
+        }
+    }
+       
 
     // Este método cria uma thread para receber streams num loop infinito.
     // Os dados recebidos são processados diretamente neste método.
@@ -477,15 +557,567 @@ public class RendezvousPoint extends Node {
     }
 
 
+    private String ChooseKey(HashMap<String, ArrayList<String>> filaDeEspera) {
+        return null;
+    }
+
     private HashMap<String, ArrayList<String>> getFilaDeEspera() {
         return null;
     }
 
     // Método para processar mensagens recebidas dos clientes
     private void processarMensagemCliente(String mensagem) {
-        // Lógica para processar mensagens recebidas dos clientes
-        System.out.println("Recebendo mensagem do cliente: " + mensagem);
+        String[] mensagem_split = mensagem.split("-");
+        String ip = mensagem_split[0];
+        String tipo = mensagem_split[1];
+        Thread t1 = null;
+    
+        try {
+            switch (tipo) {
+                case "ok?":
+                    // Diz o estado ao vizinho que enviou a mensagem
+                    escritor_vizinho(ip, this.ip + "-ok/");
+                    break;
+    
+                case "ok":
+                    // Atualiza o estado do vizinho como "ok"
+                    try {
+                        l_ok.lock();
+                        this.estados_de_vizinhos.put(ip, "ok");
+                    } finally {
+                        l_ok.unlock();
+                    }
+                    break;
+    
+                case "Vizinhos":
+                    // Atualiza a lista de vizinhos
+                    try {
+                        l_vizinhos.lock();
+                        l_vizinhos_udp.lock();
+                        SetVizinhos(mensagem_split[1]);
+                    } finally {
+                        l_vizinhos.unlock();
+                        l_vizinhos_udp.unlock();
+                    }
+                    // Segunda fase
+                    okVizinhos();
+                    break;
+    
+                case "metricas?":
+                    // Envia uma mensagem métrica para o vizinho que pediu
+                    escritor_vizinho(ip, this.ip + "-metrica/" + mensagem_split[1]);
+                    break;
+    
+                case "metrica":
+                    // Para o timer para o IP, envia mensagem Arvore para este vizinho com métricas atualizadas
+                    long tempo_fim = System.currentTimeMillis(); // Medição da latência em roundtrip
+                    long latencia;
+    
+                    try {
+                        l_lantencia.lock();
+                        latencia = tempo_fim - this.latencia.get(ip);
+                    } finally {
+                        l_lantencia.unlock();
+                    }
+    
+                    // Métricas atualizadas
+                    try {
+                        l_mensagem.lock();
+                        String arvore = this.mensagem.get(mensagem_split[1]);
+                        String arvore_atualizada = arvore + "!" + this.ip + latencia + ip;
+                        // Propaga o fluxo para a construção de árvores de forma top-down
+                        escritor_vizinho(ip, this.ip + "-Arvore?/" + arvore_atualizada);
+                    } finally {
+                        l_mensagem.unlock();
+                    }
+                    break;
+    
+                case "Arvore?":
+                    // Atualiza a árvore recebida
+                    try {
+                        l_mensagem.lock();
+                        this.mensagem.put(ip, mensagem_split[1]);
+                    } finally {
+                        l_mensagem.unlock();
+                    }
+                    metricas(ip);
+                    break;
+    
+                case "Arvore":
+                    // Adiciona uma nova árvore à lista de árvores completas
+                    String ip_enviar3;
+    
+                    try {
+                        // RP tem este IP 121.191.51.101
+                        // "121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> árvore escolhida pelo RP
+                        l_arvores_completas.lock();
+                        ip_enviar3 = QuemEnviarBottomUp(mensagem_split[1]);
+                        int key = this.arvores_completas.size() + 1;
+                        String[] temp = { ip_enviar3, mensagem_split[1] };
+                        this.arvores_completas.put(key, temp);
+                    } finally {
+                        l_arvores_completas.unlock();
+                    }
+                    sendArvoreAtiva(ip_enviar3, mensagem_split[1]);
+                    break;
+
+                    case "Stream?":
+                    if (!Stremar) {
+                        try {
+                            l_arvores_completas.lock();
+                            if (this.arvores_completas.isEmpty()) {
+                                try {
+                                    l_mensagem.lock();
+                                    this.mensagem.put(ip, mensagem_split[2]);
+                                } finally {
+                                    l_mensagem.unlock();
+                                }
+                                metricas(ip);
+                            } else {
+                                if (this.arvores_completas.size() == 1) {
+                                    sendTree(this.arvores_completas.get(1)[0]);
+                                }
+                                if (this.arvores_completas.size() > 1) {
+                                    String ip_enviar = ChooseTree();
+                                    sendTree(ip_enviar);
+                                }
+                            }
+                        } finally {
+                            l_arvores_completas.unlock();
+                        }
+                    } else {
+                        t1 = new Thread(() -> servidor_stream(ip));
+                        t1.start();
+                    }
+                    break;
+                
+                case "Stream":
+                    //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> árvore ativa
+                    this.Stremar = true;
+                    String ip_a_enviar2 = QuemEnviarBottomUp(mensagem_split[2]);
+                    t1 = new Thread(() -> servidor_stream(ip_a_enviar2));
+                    t1.start();
+                    sendSream(ip_a_enviar2, mensagem_split[3]);
+                    break;
+                
+                case "Acabou":
+                    //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> árvore a desativar
+                    this.Stremar = false;
+                    String ip_a_enviar = QuemEnviarTopDown(mensagem_split[2]);
+                    t1.interrupt();
+                    sendAcabou(ip_a_enviar, mensagem_split[3]);
+                    break;
+                
+                case "Atualiza?":
+                    //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> árvore ativa atualizada até mim
+                    String ip_a_enviar1 = QuemEnviarBottomUp(mensagem_split[2]);
+                    requestLatencia(ip_a_enviar1, mensagem_split[3]);
+                    break;
+                
+                case "Atualisa":
+                    escritor_vizinho(ip, this.ip + "-Atualizei/" + mensagem_split[2]);
+                    break;
+                
+                case "Atualizei":
+                    //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> árvore ativa atualizada até mim inclusive
+                    long tempo_fim1 = System.currentTimeMillis();
+                    long latencia1;
+                    try {
+                        l_lantencia.lock();
+                        latencia1 = tempo_fim1 - this.latencia.get(ip);
+                    } finally {
+                        l_lantencia.unlock();
+                    }
+                    String arvore_atualizada1 = Atualiza(latencia1, mensagem_split[2]);
+                    escritor_vizinho(ip, this.ip + "-Atualiza?/" + arvore_atualizada1);
+                    break;
+                
+                case "ArvoreAtualizada":
+                    //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> árvore ativa atualizada totalmente
+                    try {
+                        // Rp tem este ip 121.191.51.101
+                        //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc"
+                        l_arvores_completas.lock();
+                        AtualizaArvores(ip, mensagem_split[2]);
+                    } finally {
+                        l_arvores_completas.unlock();
+                    }
+                    String ip_enviar4 = QuemEnviarTopDown(mensagem_split[3]);
+                    sendArvoreAtualisada(ip_enviar4, mensagem_split[3]);
+                    break;
+                
+        
+                default:
+                    System.out.println("Mensagem inválida");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
+
+    private void  sendArvoreAtualisada(String ip_do_vizinho_a_enviar, String arvore_ativa) throws IOException {
+
+        Socket vizinho_a_enviar;
+        PrintWriter escritor;
+        int porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
+
+        vizinho_a_enviar = new Socket("localhost", porta_vizinho);
+        escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
+
+        escritor.println(this.ip + "-ArvoreAtualizada/" + arvore_ativa);
+
+        try {
+            escritor.close();
+            vizinho_a_enviar.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    private void AtualizaArvores(String ip_quem_me_enviou_top_down, String arvore_atualizada){
+        for (Integer i: this.arvores_completas.keySet()){
+            if(this.arvores_completas.get(i)[0].equals(ip_quem_me_enviou_top_down)){
+                this.arvores_completas.get(i)[1] = arvore_atualizada;
+            }
+
+        }
+    }
+
+    private String Atualiza(Long novaLatencia, String arvore_a_atualizar){
+        String[] caminhos = arvore_a_atualizar.split("!");
+        for (String s : caminhos) {
+
+            String[] partes = s.split(",");
+            if (partes[0].equals(this.ip)) { partes[1] = novaLatencia.toString();break;}
+        }
+
+        return  joinArray(caminhos);
+    }
+
+    private static String joinArray(String[] array) {
+        StringBuilder result = new StringBuilder();
+
+        for (int i = 0; i < array.length; i++) {
+            result.append(array[i]);
+
+            if (i < array.length - 1) {
+                // Adiciona um ponto de exclamação (!) entre os elementos, exceto no último
+                result.append("!");
+            }
+        }
+
+        return result.toString();
+    }
+
+    private void requestLatencia(String ip_do_vizinho_a_enviar, String arvore_a_atualizar) throws IOException {
+
+        Socket vizinho_a_enviar;
+        PrintWriter escritor;
+        int porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
+
+        vizinho_a_enviar = new Socket("localhost", porta_vizinho);
+        escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
+
+        // medir o tempo inicial
+        long tempo_ini = System.currentTimeMillis();
+
+        escritor.println(this.ip + "-Atualiza/" + arvore_a_atualizar);
+
+        try {
+            l_lantencia.lock();
+            latencia.put(ip, tempo_ini);
+        } finally {
+            l_lantencia.unlock();
+        }
+
+        try {
+            escritor.close();
+            vizinho_a_enviar.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    private void sendAcabou(String ip_do_vizinho_a_enviar,String arvore_a_desativar) throws IOException {
+
+        Socket vizinho_a_enviar;
+        PrintWriter escritor;
+        int porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
+
+        vizinho_a_enviar = new Socket("localhost", porta_vizinho);
+        escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
+
+        escritor.println(this.ip + "-Acabou/" + arvore_a_desativar);
+
+        try {
+            escritor.close();
+            vizinho_a_enviar.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    public String QuemEnviarTopDown(String arvore) {
+        String[] caminhos = arvore.split("!");
+        String res = "";
+        for (String s : caminhos) {
+
+            String[] partes = s.split(",");
+            if (partes[2].equals(this.ip)) { res = partes[0]; break; }
+        }
+        return res;
+    }
+
+    //fase para ver se os vizinhos estão ok
+    private void okVizinhos() {
+
+        for (String ip : vizinhos.keySet()) {
+
+            new Thread(() -> {
+                Socket vizinho = null;
+                PrintWriter escritor = null;
+
+                try {
+                    vizinho = new Socket("localhost", this.vizinhos.get(ip));
+                    escritor = new PrintWriter(vizinho.getOutputStream(), true);
+
+                    escritor.println(this.ip + "-ok?/");
+
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } finally {
+                    try {
+                        if (escritor != null) escritor.close();
+                        if (vizinho != null) vizinho.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }).start();
+        }
+    }
+
+    // recetor e propagador de strems
+    private void servidor_stream(String ip_vizinho) {
+        try (DatagramSocket socket = new DatagramSocket(this.porta_strems)) {
+            try {
+                byte[] receiveData = new byte[1024];
+                while (true) {
+                    DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+                    socket.receive(receivePacket);
+
+                    // Converte os bytes recebidos para um DataInputStream
+                    ByteArrayInputStream byteStream = new ByteArrayInputStream(receivePacket.getData());
+                    DataInputStream dataInputStream = new DataInputStream(byteStream);
+
+                    // Lê os dados do DataInputStream
+                    int length = dataInputStream.readInt();
+                    byte[] data = new byte[length];
+                    dataInputStream.readFully(data);
+                    DatagramPacket sendPacket = new DatagramPacket(data, data.length, InetAddress.getByName(ip_vizinho), this.vizinhos_udp.get(ip_vizinho));
+                    socket.send(sendPacket);
+
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } catch (SocketException e) {
+            e.printStackTrace();
+        }
+}
+
+    private String ChooseTree() {
+        Long[] latencias_totais = new Long[this.arvores_completas.size()];
+
+        for (Integer i : this.arvores_completas.keySet()) {
+            latencias_totais[i - 1] = GetLatencia(this.arvores_completas.get(i)[1]);
+        }
+        return this.arvores_completas.get(mini(latencias_totais))[0];
+    }
+    
+    private int mini(Long[] array) {
+        // Inicializa o índice mínimo como 0
+        int indiceMinimo = 0;
+
+        // Itera sobre o array para encontrar o índice do valor mínimo
+        for (int i = 1; i < array.length; i++) {
+            if (array[i] < array[indiceMinimo]) {
+                indiceMinimo = i;
+            }
+        }
+        return indiceMinimo;
+    }
+
+
+    private Long GetLatencia(String arvore) {
+        // Divida a string usando delimitadores
+        String[] partes = arvore.split("[,!]");
+
+        long soma = 0;
+
+        // Itere sobre as partes e some os valores numéricos
+        for (int i = 1; i < partes.length; i += 3) {
+            soma += Long.parseLong(partes[i]);
+        }
+        return soma;
+    }
+
+    private void sendTree(String ip_do_vizinho_a_enviar) throws IOException {
+
+        Socket vizinho_a_enviar;
+        PrintWriter escritor;
+        int porta_vizinho;
+
+        porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
+
+        vizinho_a_enviar = new Socket("localhost", porta_vizinho);
+        escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
+
+        escritor.println(this.ip + "-Stream?/");
+
+        try {
+            escritor.close();
+            vizinho_a_enviar.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    private void sendSream(String ip_do_vizinho_a_enviar,String arvore_a_desativar) throws IOException {
+
+        Socket vizinho_a_enviar;
+        PrintWriter escritor;
+        int porta_vizinho= this.vizinhos.get(ip_do_vizinho_a_enviar);
+
+        vizinho_a_enviar = new Socket("localhost", porta_vizinho);
+        escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
+
+        escritor.println(this.ip + "-Stream/" + arvore_a_desativar);
+
+        try {
+            escritor.close();
+            vizinho_a_enviar.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    private void SetVizinhos(String vizinhos) {
+        // [121.191.51.101:12341:14321,121.191.52.101:12342:24321]
+        String[] ips_portas = vizinhos.split(",");
+
+        for (String ip_porta : ips_portas) {
+            // [121.191.51.101, 12341, 14321]
+            String[] vizinho = ip_porta.split(":");
+
+            this.vizinhos.put(vizinho[0], Integer.parseInt(vizinho[1]));
+
+            this.vizinhos_udp.put(vizinho[0], Integer.parseInt(vizinho[2]));
+        }
+    }
+
+    public String QuemEnviarBottomUp(String arvore) {
+        String[] caminhos = arvore.split("!");
+        String res = "";
+        for (String s : caminhos) {
+
+            String[] partes = s.split(",");
+            if (partes[0].equals(this.ip)) { res = partes[2];break;
+            }
+        }
+        return res;
+    }
+
+    private void sendArvoreAtiva(String ip_do_vizinho_a_enviar, String arvore_ativa) throws IOException {
+
+        Socket vizinho_a_enviar;
+        PrintWriter escritor;
+        int porta_vizinho= this.vizinhos.get(ip_do_vizinho_a_enviar);
+
+        vizinho_a_enviar = new Socket("localhost", porta_vizinho);
+        escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
+
+        escritor.println(this.ip + "-Arvore/" + arvore_ativa);
+
+        try {
+            escritor.close();
+            vizinho_a_enviar.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+     // medir o tempo de quanto demora antes de mandar uma mensaguem
+     private void metricas(String ip_vizinho_enviou) {
+
+        // verificar se todos os meus vizinhos estão preparados para pode-mos mandar mensaguens
+        if (this.estados_de_vizinhos.values().stream().allMatch(value -> value.equals("ok"))) {
+
+            for (String ip : this.vizinhos.keySet()) {
+
+                if (!ip.equals(ip_vizinho_enviou)) {
+                    new Thread(() -> {
+                        Socket vizinho = null;
+                        PrintWriter escritor = null;
+
+                        try {
+                            vizinho = new Socket("localhost", this.vizinhos.get(ip));
+                            escritor = new PrintWriter(vizinho.getOutputStream(), true);
+
+                            // medir o tempo inicial
+                            long tempo_ini = System.currentTimeMillis();
+                            escritor.println(this.ip + "-metricas?/" + ip_vizinho_enviou);
+                            try {
+                                l_lantencia.lock();
+                                latencia.put(ip, tempo_ini);
+                            } finally {
+                                l_lantencia.unlock();
+                            }
+
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        } finally {
+                            try {
+                                if (escritor != null) escritor.close();
+                                if (vizinho != null) vizinho.close();
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }).start();
+                }
+            }
+        } else System.out.println("Erro!!!!");
+    }
+
+    private  void  escritor_vizinho(String ip_do_vizinho_a_enviar, String mensagem)throws IOException{
+
+        Socket vizinho_a_enviar;
+        PrintWriter escritor;
+        int porta_vizinho;
+
+        porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
+
+        vizinho_a_enviar = new Socket("localhost", porta_vizinho);
+        escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
+
+        escritor.println(mensagem);
+
+        try {
+            escritor.close();
+            vizinho_a_enviar.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+    
 
     // Método para enviar stream para o cliente
     private void enviarStreamParaCliente(String clienteIP, String mensagem) {
