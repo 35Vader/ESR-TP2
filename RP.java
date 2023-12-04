@@ -368,44 +368,33 @@ public class RP {
                                         break;
 
                                     case "Stream?":
+
+                                        Thread t1 = new Thread(() -> servidor_stream(ip));
+                                        try {
+                                            l_thread.lock();
+                                            lista_threads.put(ip,t1);
+                                        }finally {l_thread.unlock();}
+                                        t1.start();
+
                                         if (!Stremar) {
                                             try {
                                                 l_arvore_escolhas.lock();
                                                     if (this.arvores_escolha.get(ip).size() == 1) {
                                                         String bestTree = this.arvores_escolha.get(ip).get(0).getArvore();
                                                         sendSream(ip,bestTree);
+                                                        this.Stremar = true;
                                                         sendSreamServer(ip);
                                                     }
 
                                                     else{
                                                         String bestTree = ChooseTree(ip);
                                                         sendSream(ip,bestTree);
+                                                        this.Stremar = true;
                                                         sendSreamServer(ip);
                                                     }
 
-                                            } finally {
-                                                l_arvore_escolhas.unlock();
-                                            }
-
-                                        } else {
-                                            Thread t1 = new Thread(() -> servidor_stream(ip));
-                                            try {
-                                                l_thread.lock();
-                                                lista_threads.put(ip,t1);
-                                            }finally {l_thread.unlock();}
-                                            t1.start();
+                                            } finally { l_arvore_escolhas.unlock();}
                                         }
-                                        break;
-
-                                    case "Stream":
-                                        //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> ip ativa
-                                        this.Stremar = true;
-                                        Thread t1 = new Thread(() -> servidor_stream(mensagem_split[1]));
-                                        try {
-                                            l_thread.lock();
-                                            lista_threads.put(ip,t1);
-                                        }finally {l_thread.unlock();}
-                                        t1.start();
                                         break;
 
                                     case "Acabou":
@@ -606,7 +595,7 @@ public class RP {
 
     }
 
-    private void sendSream(String ip_do_vizinho_a_enviar,String arvore_a_desativar) throws IOException {
+    private void sendSream(String ip_do_vizinho_a_enviar,String arvore_a_ativar) throws IOException {
 
         Socket vizinho_a_enviar;
         PrintWriter escritor;
@@ -615,7 +604,7 @@ public class RP {
         vizinho_a_enviar = new Socket("localhost", porta_vizinho);
         escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
 
-        escritor.println(this.ip + "-Stream/" + arvore_a_desativar);
+        escritor.println(this.ip + "-Stream/" + arvore_a_ativar);
 
         try {
             escritor.close();

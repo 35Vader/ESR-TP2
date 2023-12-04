@@ -41,7 +41,7 @@ public class UDPServer {
                     // Envia uma resposta ao cliente
                     String resposta = "Servidor recebeu " + length + " bytes.";
                     byte[] sendData = resposta.getBytes();
-                    DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, clientAddress, clientPort);
+                    DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, InetAddress.getByName("localhost"), clientPort);
                     socket.send(sendPacket);
                 }
             } catch (IOException e) {
@@ -70,7 +70,7 @@ public class UDPServer {
                 byte[] sendData = byteStream.toByteArray();
 
                 // Envia os dados ao servidor
-                DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, serverAddress, porta);
+                DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length,InetAddress.getByName("localhost") , porta);
                 socket.send(sendPacket);
 
                 // Recebe a resposta do servidor

@@ -427,14 +427,20 @@ public class Bootstraper {
                                     case "Stream":
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa
                                         this.Stremar = true;
+
                                         String ip_a_enviar2 = QuemEnviarBottomUp(mensagem_split[1]);
+
                                         Thread t1 = new Thread(() -> servidor_stream(ip_a_enviar2));
                                         try {
                                             l_thread.lock();
                                             lista_threads.put(ip,t1);
                                         }finally {l_thread.unlock();}
                                         t1.start();
+
                                         sendSream(ip_a_enviar2,mensagem_split[1]);
+
+                                        Thread t = new Thread( () -> AddArvore(mensagem_split[1],ip) );
+                                        t.start();
                                         break;
 
                                     case "Acabou":
@@ -734,6 +740,17 @@ public class Bootstraper {
 
     }
 
+    private void AddArvore(String arvore_nova, String ip){
+        try {
+            boolean b = false;
+            this.l_arvores_completas.lock();
+            for (Integer i: this.arvores_completas.keySet()) {
+                if ( this.arvores_completas.get(i)[1].equals(arvore_nova)) {b = true; break;}
+            }
+            if (!b){String temp[] = {ip,arvore_nova}; Integer d = this.arvores_completas.size()+1; this.arvores_completas.put(d,temp);}
+        }finally {l_arvores_completas.unlock();}
+
+    }
 
     private void requestLatencia(String ip_do_vizinho_a_enviar, String arvore_a_atualizar) throws IOException {
 

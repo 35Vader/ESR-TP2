@@ -1,8 +1,5 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.io.*;
+import java.net.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.locks.ReentrantLock;
@@ -11,15 +8,19 @@ import java.util.concurrent.locks.ReentrantLock;
 //mensagens para nós = ip-type/meng
 
 public class Servidor {
-    private String ip;
-    private int porta;
 
-    // ip -> [StreamIP; StreamEmSi]
-    private ReentrantLock l_pedidos = new ReentrantLock();
-    private HashMap<String, String[] > pedidos;
+    private int porta;
+    private int porta_strems;
+    private int porta_RP;
 
     ///lock da fila de espera;
     private final ReentrantLock l_fila_de_espera = new ReentrantLock();
+
+    // loock da lista de threads
+    private final ReentrantLock l_thread = new ReentrantLock();
+
+    // ip -> Thread a interromper
+    private final HashMap<String, Thread> lista_threads = new HashMap<>();
 
     // ip -> [men]
     private final HashMap<String, ArrayList<String>> fila_de_espera = new HashMap<>();
@@ -36,16 +37,30 @@ public class Servidor {
 
     }
 
-    private void sevidor(){
+    public void inicializador(){
+        servidor();
+    }
+
+    public Servidor(int porta, int porta_strems, int porta_RP){
+        this.porta = porta;
+        this.porta_strems = porta_strems;
+        this.porta_RP = porta_RP;
+    }
+
+    private void servidor() {
+        // Uma especie de recessionista
         new Thread(() -> {
             try (ServerSocket ouvinte_mestre = new ServerSocket(this.porta)) {
+                // ligação entre um vizinho e 'eu' (eu sou um Node)
+
                 // Thread para leitura de mensagens de todos os seus vizinhos
                 new Thread(() -> {
                     try {
-                        Socket ouvinte = ouvinte_mestre.accept();
-                        BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
                         String mensagem;
                         while (true) {
+                            Socket ouvinte = ouvinte_mestre.accept();
+                            BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
+
                             //ip-tipo/mensg
                             mensagem = leitor_vizinho.readLine();
                             // [ip,tipo/mensg]
@@ -63,10 +78,90 @@ public class Servidor {
                     }
                 }).start();
 
+                // uma especie de capataz
+                new Thread(() -> {
+                    while (true) {
+                        if (!this.fila_de_espera.values().isEmpty()) {
+                            String mensagem;
+                            String ip;
+                            try {
+                                l_fila_de_espera.lock();
+                                ip = this.fila_de_espera.keySet().stream().toList().get(0);
+                                mensagem = this.fila_de_espera.get(ip).get(0);
+                                this.fila_de_espera.get(ip).remove(0);
+                            } finally {
+                                l_fila_de_espera.unlock();
+                            }
 
+                            // [tipo, meng]
+                            String[] mensagem_split = mensagem.split("/");
+
+                            switch (mensagem_split[0]) {
+
+                                case "SendStream":
+                                    Thread t1 = new Thread(() -> servidor_stream());
+                                    try {
+                                        l_thread.lock();
+                                        lista_threads.put(ip,t1);
+                                    }finally {l_thread.unlock();}
+                                    t1.start();
+                                    break;
+
+                                case "Acabou":
+                                    Thread t;
+                                    try {
+                                        l_thread.lock();
+                                        t = lista_threads.get(ip);
+                                    }finally {l_thread.unlock();}
+                                    t.interrupt();
+                                    break;
+
+                                default:
+                                    System.out.println("Mensagem inválida");
+                            }
+                        }
+                    }
+                }).start();
+
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-            catch (IOException e) { e.printStackTrace();}
-        });
-   }
+        }).start();
+    }
+
+    // recetor e propagador de strems
+    private void servidor_stream() {
+        try (DatagramSocket socket = new DatagramSocket(this.porta_strems)) {
+            try {
+                while (true) {
+
+                    // Dados a serem enviados como bytes
+                    byte[] data = "Hello, servidor!".getBytes();
+
+                    // Cria um DataOutputStream para facilitar a escrita de dados binários
+                    ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+                    DataOutputStream dataOutputStream = new DataOutputStream(byteStream);
+
+                    // Escreve o comprimento dos dados seguido pelos próprios dados
+                    dataOutputStream.writeInt(data.length);
+                    dataOutputStream.write(data);
+
+                    // Converte os dados para um array de bytes
+                    byte[] sendData = byteStream.toByteArray();
+
+                    // Envia os dados ao RP
+                    DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, InetAddress.getByName("localhost") , porta_RP);
+                    socket.send(sendPacket);
+
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } catch (SocketException e) {
+            e.printStackTrace();
+        }
+    }
+
+
 
 }
