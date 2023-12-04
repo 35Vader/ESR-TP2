@@ -2,38 +2,30 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.*;
 
 public class RendezvousPoint extends Node {
-
-    // l_latencia: garantir a sincronização em operações relacionadas à latência.
-    // latenciaClientes: armazena informações de latência para cada cliente identificado por seu endereço IP.
-    // caminhoClientes: armazena informações de caminhos para cada cliente identificado por seu endereço IP.
-    // contadorMensagensRecebidas: número de mensagens recebidas.
     private final ReentrantLock l_latencia = new ReentrantLock();
-    private final HashMap<String, Long> latenciaClientes = new HashMap<>();
-    private final static HashMap<String, String> caminhoClientes = new HashMap<>();
+    private final AddressingTable addressingTable;
     private AtomicInteger contadorMensagensRecebidas = new AtomicInteger(0);
     private final Timer timerAtualizacaoArvore = new Timer();
     private final ReentrantLock l_arvores = new ReentrantLock();
+    private final HashMap<String, Long> latenciaClientes = new HashMap<>();
     private final HashMap<String, List<String>> arvoresClientes = new HashMap<>();
+    private final static HashMap<String, String> caminhoClientes = new HashMap<>();
 
-    public RendezvousPoint(String ip, int porta, int porta_bootstraper, int porta_strems) throws IOException {
+    public RendezvousPoint(String ip, int porta, int porta_bootstraper, int porta_strems, Map<String, String> vizinhos)
+            throws IOException {
         super(ip, porta, porta_bootstraper, porta_strems);
         iniciarTimerAtualizacaoArvore();
-        // Inicie o servidor ao criar uma instância de RendezvousPoint
+        addressingTable = new AddressingTable(vizinhos);
         servidor();
+        receberStreams();
     }
 
     private void mensagemRecebida() {
+        AtomicInteger contadorMensagensRecebidas = new AtomicInteger(0);
         contadorMensagensRecebidas.incrementAndGet();
-    }
-
-    private void enviarMensagemParaCliente(String clienteIP, String mensagem) {
-        // Lógica para enviar mensagem para o cliente
-        // Você pode usar sockets ou outro mecanismo de comunicação aqui
-        System.out.println("Enviando mensagem para o cliente " + clienteIP + ": " + mensagem);
     }
 
     private void receberMensagemDoCliente(String clienteIP, String mensagem) {
@@ -44,10 +36,9 @@ public class RendezvousPoint extends Node {
     // Este método cria uma thread para receber streams num loop infinito.
     // Os dados recebidos são processados diretamente neste método.
     // Se todas as mensagens forem recebidas, o método escolherCaminhos é chamado.
-    public void receberStreams() {
+    private void receberStreams() {
         new Thread(() -> {
             try {
-                // Lógica para receber e processar streams
                 DatagramSocket socket = new DatagramSocket(getPortaStrems());
                 byte[] receiveData = new byte[1024];
 
@@ -66,7 +57,7 @@ public class RendezvousPoint extends Node {
 
                     // Lógica de processamento da stream
                     processarStream(data, receivePacket.getAddress().getHostAddress());
-                    
+
                     // Exemplo: imprimir mensagem para demonstração
                     System.out.println("RendezvousPoint recebendo streams...");
                 }
@@ -74,12 +65,6 @@ public class RendezvousPoint extends Node {
                 e.printStackTrace();
             }
         }).start();
-    }
-
-    // Envia mensagem para um nó específico
-    private void enviarMensagemParaNodo(String clienteIP, String mensagem) {
-        // Lógica para enviar mensagem para o nó
-        System.out.println("Enviando mensagem para o nó " + clienteIP + ": " + mensagem);
     }
 
 
@@ -101,14 +86,15 @@ public class RendezvousPoint extends Node {
                 // Lógica para processar a mensagem com base no tipo
                 if ("bootup".equals(tipo)) {
                     // Envia mensagens bottom-up
-                    enviarMensagemParaNodo(clienteIP, "ip-type/meng");
+                    addressingTable.turnOn(clienteIP);
                 } else if ("topdown".equals(tipo)) {
                     // Recebe mensagens top-down
+                    addressingTable.turnOff(clienteIP);
                     receberMensagemDoCliente(clienteIP, mensagemConteudo);
                 }
 
                 // Atualize as informações de latência para o cliente
-                atualizarLatencia(clienteIP, 0);  // Aqui você pode ajustar a latência conforme necessário
+                atualizarLatencia(clienteIP, 0); 
 
                 // Chama o método para indicar que uma mensagem foi recebida
                 mensagemRecebida();
@@ -129,22 +115,21 @@ public class RendezvousPoint extends Node {
 
     
     
-    // Atualiza as informações de latência para um cliente específico.
-    private void atualizarLatencia(String clienteIP, long latencia) {
+    private void atualizarLatencia(String clienteIP, int novaLatencia) {
         try {
             l_latencia.lock();
     
             if (latenciaClientes.containsKey(clienteIP)) {
-                long latenciaAntiga = latenciaClientes.get(clienteIP);
+                Long latenciaAntiga = latenciaClientes.get(clienteIP);
     
-                if (latencia > latenciaAntiga) {
+                if (novaLatencia > latenciaAntiga) {
                     // A nova latência é maior
                     System.out.println("A nova latência é maior para " + clienteIP);
                     ajustarCaminho(clienteIP);
-                } else if (latencia < latenciaAntiga) {
+                } else if (novaLatencia < latenciaAntiga) {
                     // A nova latência é menor
                     System.out.println("A nova latência é menor para " + clienteIP);
-                    latenciaClientes.put(clienteIP, latencia);
+                    latenciaClientes.put(clienteIP, (long) novaLatencia);
                     atualizarCaminho(clienteIP);
                 } else {
                     // A nova latência é igual à latência existente
@@ -152,9 +137,41 @@ public class RendezvousPoint extends Node {
                 }
             } else {
                 // Adicionar nova latência
-                latenciaClientes.put(clienteIP, latencia);
+                latenciaClientes.put(clienteIP, (long) novaLatencia);
             }
     
+        } finally {
+            l_latencia.unlock();
+        }
+    }
+    
+
+    // Atualiza o caminho quando a latência é menor.
+    private void atualizarCaminho(String clienteIP) {
+        try {
+            l_latencia.lock();
+
+            long menorLatencia = Long.MAX_VALUE;
+            String caminhoMenorLatencia = null;
+
+            // Itera sobre todas as latências dos clientes
+            for (Map.Entry<String, Long> entry : latenciaClientes.entrySet()) {
+                String ipVizinho = entry.getKey();
+                long latencia = entry.getValue();
+
+                // Latência do cliente atual é menor que a menor latência já registada
+                if (latencia < menorLatencia) {
+                    menorLatencia = latencia;
+                    caminhoMenorLatencia = ipVizinho;
+                }
+            }
+
+            if (caminhoMenorLatencia != null && caminhoMenorLatencia.equals(clienteIP)) {
+                System.out.println("Atualizando caminho para " + clienteIP + ". Menor latência para " + caminhoMenorLatencia);
+            } else {
+                System.out.println("Nenhum caminho disponível ou não é necessário atualizar para " + clienteIP);
+            }
+
         } finally {
             l_latencia.unlock();
         }
@@ -239,36 +256,6 @@ public class RendezvousPoint extends Node {
         }
     }
     
-    // Atualiza o caminho quando a latência é menor.
-    private void atualizarCaminho(String clienteIP) {
-        try {
-            l_latencia.lock();
-
-            long menorLatencia = Long.MAX_VALUE;
-            String caminhoMenorLatencia = null;
-
-            // Itera sobre todas as latências dos clientes
-            for (Map.Entry<String, Long> entry : latenciaClientes.entrySet()) {
-                String ipVizinho = entry.getKey();
-                long latencia = entry.getValue();
-
-                // Latência do cliente atual é menor que a menor latência já registada
-                if (latencia < menorLatencia) {
-                    menorLatencia = latencia;
-                    caminhoMenorLatencia = ipVizinho;
-                }
-            }
-
-            if (caminhoMenorLatencia != null && caminhoMenorLatencia.equals(clienteIP)) {
-                System.out.println("Atualizando caminho para " + clienteIP + ". Menor latência para " + caminhoMenorLatencia);
-            } else {
-                System.out.println("Nenhum caminho disponível ou não é necessário atualizar para " + clienteIP);
-            }
-
-        } finally {
-            l_latencia.unlock();
-        }
-    }
 
     // Cria uma HashMap<String, String> no formato 'IP_Cliente;IP_Node1,Latência1-2,IP_Node2!IP_Node2,Latência2-3,IP_Node3!IP_Node3,Latência3-4,IP_Node4...' 
     // onde sabe que se separar a HashMap por ';'' obtém no primeiro argumento ([0]) o IP_Cliente, se separar por '!' separa o segundo argumento ([1])
@@ -321,22 +308,65 @@ public class RendezvousPoint extends Node {
         return contadorMensagensRecebidas.get() >= totalMensagensEsperadas;
     }
 
-    // Compara latências e escolhe caminhos
+    // FALTA ACABAR
+    // Adicione a lógica para escolher o caminho com base na latência
+    private void escolherCaminho(String clienteIP, long latencia) {
+        final long LIMITE_LATENCIA = 100;   
+
+        if (latencia < LIMITE_LATENCIA) {
+            // Se a latência for menor que o limite
+            System.out.println("Escolher caminho rápido para " + clienteIP);
+            // Lógica específica para caminhos rápidos
+        } else {
+            // Se a latência for maior ou igual ao limite
+            System.out.println("Escolher caminho padrão para " + clienteIP);
+            // Lógica específica para caminhos padrão
+        }
+    }
+
+    // Método para encontrar o cliente com a menor latência
+    private String encontrarClienteComMenorLatencia() {
+        long menorLatencia = Long.MAX_VALUE;
+        String clienteComMenorLatencia = null;
+
+        for (Map.Entry<String, Long> entry : latenciaClientes.entrySet()) {
+            String clienteIP = entry.getKey();
+            long latencia = entry.getValue();
+
+            if (latencia < menorLatencia) {
+                menorLatencia = latencia;
+                clienteComMenorLatencia = clienteIP;
+            }
+        }
+
+        return clienteComMenorLatencia;
+    }
+
+
     private void escolherCaminhos() {
-        // Lógica para comparar latências e escolher caminhos
         try {
             l_latencia.lock();
-            // Itera sobre os clientes para escolher o caminho com menos latência
-            for (String clienteIP : latenciaClientes.keySet()) {
-                long latencia = latenciaClientes.get(clienteIP);
 
-                // Por acabar
-                System.out.println("Escolhendo caminho para o cliente " + clienteIP + " com latência " + latencia);
+            // Verifique se há clientes na tabela de latência
+            if (latenciaClientes.isEmpty()) {
+                System.out.println("Sem clientes na tabela de latência.");
+                return;
+            }
+
+            // Encontrar o cliente com a menor latência
+            String clienteComMenorLatencia = encontrarClienteComMenorLatencia();
+        
+           // Verifique se o cliente com menor latência foi encontrado
+            if (clienteComMenorLatencia != null) {
+                escolherCaminho(clienteComMenorLatencia, latenciaClientes.get(clienteComMenorLatencia));
+            } else {
+                System.out.println("Não foi possível encontrar o cliente com a menor latência.");
             }
         } finally {
             l_latencia.unlock();
         }
     }
+
 
     // Cria uma nova thread para aguardar e processar a lista de árvores, incluindo a chamada para escolherCaminhos após o processamento.
     public void aguardarArvores() {
@@ -345,6 +375,7 @@ public class RendezvousPoint extends Node {
                 // Aguardar a lista de árvores
                 Thread.sleep(5000); // Aguarda por 5 segundos
     
+                // FALTA ACABAR
                 // Processar a lista de árvores
                 System.out.println("RendezvousPoint processando lista de árvores...");
     
@@ -368,10 +399,7 @@ public class RendezvousPoint extends Node {
                 System.out.println("Comparando latência para o cliente " + clienteIP + ": " + latencia);
     
                 ajustarCaminho(clienteIP); 
-            }
-    
-            System.out.println("RendezvousPoint comparando latência...");
-    
+            }    
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -461,8 +489,34 @@ public class RendezvousPoint extends Node {
 
     // Método para enviar stream para o cliente
     private void enviarStreamParaCliente(String clienteIP, String mensagem) {
-        // Lógica para enviar stream para o cliente
-        System.out.println("Enviando stream para o cliente " + clienteIP + ": " + mensagem);
+        try {
+            // Assume que você tem uma instância DatagramSocket para enviar dados
+            DatagramSocket socket = new DatagramSocket();
+
+            // Converte a mensagem para bytes
+            byte[] mensagemBytes = mensagem.getBytes();
+            int length = mensagemBytes.length;
+
+            // Cria um ByteArrayOutputStream para construir os dados de envio
+            ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+            DataOutputStream dataOutputStream = new DataOutputStream(byteStream);
+
+            // Escreve o comprimento e os dados no DataOutputStream
+            dataOutputStream.writeInt(length);
+            dataOutputStream.write(mensagemBytes);
+
+            // Obtém os bytes finais a serem enviados
+            byte[] data = byteStream.toByteArray();
+
+            // Envia os dados para o cliente
+            DatagramPacket packet = new DatagramPacket(data, data.length, getPortaStrems());
+            socket.send(packet);
+
+            // Fecha o socket após o envio
+            socket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
     
 
