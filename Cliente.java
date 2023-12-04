@@ -105,6 +105,9 @@ public class Cliente {
         }
 
     }
+    public void inicializador(){
+        servidor();
+    }
 
     //recessor geral
     private void servidor() {
@@ -252,7 +255,7 @@ public class Cliente {
         if(!this.arvores_completas.get(ip_do_node_folha).getEstado()){
 
             this.latencia = System.currentTimeMillis();
-            escritor.println(this.ip + "-" + "metricas?/" );
+            escritor.println(this.ip + "-" + "metricas?/ " );
         }
         else escritor.println(this.ip + "-" + "Stream?/");
 

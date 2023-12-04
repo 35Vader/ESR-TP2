@@ -98,6 +98,8 @@ public class Bootstraper {
     public void inicializa() throws IOException {
         // preparar servidor
         servidor();
+        //sleep...
+        okVizinhos();
     }
 
     private String VizinhosMaker(HashMap<String, Integer> topologia, HashMap<String, Integer> topologia_udp) throws NullPointerException{
