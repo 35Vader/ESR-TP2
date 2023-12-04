@@ -8,7 +8,7 @@ import java.io.*;
 import java.net.*;
 
 public class UDPServer {
-    public static void main() {
+    public static void main(String[] args) {
         final int porta = 12345;
 
         // Thread para o servidor
@@ -48,10 +48,7 @@ public class UDPServer {
                 e.printStackTrace();
             }
         }).start();
-    }
 
-    public static void main(String[] args) {
-        final int porta = 12345;
 
         // Thread para o cliente
         new Thread(() -> {
@@ -87,5 +84,4 @@ public class UDPServer {
                 e.printStackTrace();
             }
         }).start();
-    }
-}
+    }}

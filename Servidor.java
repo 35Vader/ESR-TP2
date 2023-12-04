@@ -36,7 +36,7 @@ public class Servidor {
 
     }
 
-    private void stream_sender(){
+    private void sevidor(){
         new Thread(() -> {
             try (ServerSocket ouvinte_mestre = new ServerSocket(this.porta)) {
                 // Thread para leitura de mensagens de todos os seus vizinhos
@@ -63,11 +63,7 @@ public class Servidor {
                     }
                 }).start();
 
-                new Thread( () -> {
 
-
-
-                }).start();
             }
             catch (IOException e) { e.printStackTrace();}
         });
