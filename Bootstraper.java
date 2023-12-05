@@ -37,31 +37,25 @@ public class Bootstraper {
     private final ReentrantLock l_fila_de_espera = new ReentrantLock();
 
     // lock da lista de vizinhos
-    private final ReentrantLock l_vizinhos = new ReentrantLock();
-
-    // lock da lista de vizinhos
-    private final ReentrantLock l_vizinhos_udp = new ReentrantLock();
-
-    // lock da lista de vizinhos
     private final ReentrantLock l_arvores_completas = new ReentrantLock();
 
     // lock da lista dos estados dos vizinhos
     private final ReentrantLock l_ok = new ReentrantLock();
 
     // ip->porta_tcp
-    private final HashMap<String, Integer> vizinhos;
+    private final HashMap<String, Integer> vizinhos = new HashMap<>();
 
     // loock da lista de threads
     private final ReentrantLock l_thread = new ReentrantLock();
 
     //ip->porta_udp
-    private final HashMap<String, Integer> vizinhos_udp;
+    private final HashMap<String, Integer> vizinhos_udp = new HashMap<>();
 
     // ip -> vizinhos dele
-    private final HashMap<String, HashMap<String,Integer>> topologia;
+    private final HashMap<String, HashMap<String,Integer>> topologia = new HashMap<>();
 
     // ip -> vizinhos dele mas com porta udp
-    private final HashMap<String, HashMap<String,Integer>> topologia_udp;
+    private final HashMap<String, HashMap<String,Integer>> topologia_udp = new HashMap<>();
 
     // ip -> [men]
     private final HashMap<String, ArrayList<String>> fila_de_espera = new HashMap<>();
@@ -82,29 +76,44 @@ public class Bootstraper {
     private final HashMap<String, Thread> lista_threads = new HashMap<>();
 
     // Construtor
-    public Bootstraper(String ip, int porta, int porta_strems,
-                       HashMap<String,Integer> vizinhos, HashMap<String,Integer> vizinhos_udp,
-                       HashMap<String, HashMap<String,Integer>> topologia, HashMap<String, HashMap<String,Integer>> topologia_udp){
+    public Bootstraper(String ip, int porta, int porta_strems){
 
         this.ip = ip;
         this.porta = porta;
-        this.vizinhos = vizinhos;
-        this.vizinhos_udp = vizinhos_udp;
         this.porta_strems = porta_strems;
-        this.topologia = topologia;
-        this.topologia_udp = topologia_udp;
+    }
+
+    public void setTopologia(String ip,HashMap<String,Integer> v_tcp, HashMap<String,Integer> v_udp){
+        this.topologia.put(ip,v_tcp);
+        this.topologia_udp.put(ip,v_udp);
+    }
+
+    public void setvizinhos(HashMap<String,Integer> vizinhos, HashMap<String,Integer> vizinhos_udp){
+        for (String s :vizinhos.keySet()) {
+                this.vizinhos.put(s,vizinhos.get(s));
+        }
+
+        for (String s :vizinhos_udp.keySet()) {
+            this.vizinhos.put(s,vizinhos_udp.get(s));
+        }
+
     }
 
     public void inicializa() throws IOException {
         // preparar servidor
         servidor();
         //sleep...
+        //okVizinhos();
+    }
+
+    public void TudoOK(){
+        // segunda fase
         okVizinhos();
     }
 
     private String VizinhosMaker(HashMap<String, Integer> topologia, HashMap<String, Integer> topologia_udp) throws NullPointerException{
         // "121.191.51.101:12341:14321, 121.191.52.101:12342:24321"
-        StringBuilder vizinhos = null;
+        StringBuilder vizinhos = new StringBuilder();
         int i = 0;
         for (String s: topologia.keySet()) {
             if(i < topologia.size()) vizinhos.append(s).append(":").append(topologia.get(s)).append(":").append(topologia_udp.get(s)).append(",");
@@ -242,20 +251,32 @@ public class Bootstraper {
 
     }
 
+    private boolean IsEmpty(HashMap<String, ArrayList<String>> emp){
+        boolean res = true;
+        try {
+            l_fila_de_espera.lock();
+
+            for (String s: emp.keySet()) {
+                if ( (emp.get(s).isEmpty() == false) ) {res = false; break;}
+            }
+        }finally {l_fila_de_espera.unlock();}
+
+        return res;
+    }
+
     //recessor geral
     private void servidor() {
+
         // Uma especie de recessionista
         new Thread(() -> {
-            try (ServerSocket ouvinte_mestre = new ServerSocket(this.porta)) {
-                // ligação entre um vizinho e 'eu' (eu sou um Node)
 
                 // Thread para leitura de mensagens de todos os seus vizinhos
                 new Thread(() -> {
                     try {
-
                         String mensagem;
+                        ServerSocket ouvinte_mestre = new ServerSocket(this.porta);
+                            // ligação entre um vizinho e 'eu' (eu sou um Node)
                         while (true) {
-
                             Socket ouvinte = ouvinte_mestre.accept();
                             BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
 
@@ -280,7 +301,7 @@ public class Bootstraper {
                 new Thread(() -> {
                     try {
                         while (true) {
-                            if (!this.fila_de_espera.values().isEmpty()) {
+                            if ( !( IsEmpty (this.fila_de_espera) ) ){
                                 String mensagem;
                                 String ip;
                                 try {
@@ -320,11 +341,11 @@ public class Bootstraper {
                                            vizinhos = VizinhosMaker( this.topologia.get(ip), this.topologia_udp.get(ip));
 
                                         } finally {
-                                            l_vizinhos.unlock();
-                                            l_vizinhos_udp.unlock();
+                                            l_topologia_udp.unlock();
+                                            l_topologia.unlock();
                                         }
 
-                                        escritor_vizinho(ip,vizinhos);
+                                        escritor_vizinho(Integer.parseInt(mensagem_split[1]), this.ip+ "-Vizinhos/" + vizinhos);
 
                                         break;
 
@@ -508,10 +529,7 @@ public class Bootstraper {
                     }
                 }).start();
 
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        });
+        }).start();
     }
 
     // recetor e propagador de strems
@@ -545,30 +563,26 @@ public class Bootstraper {
 
     //fase para ver se os vizinhos estão ok
     private void okVizinhos() {
-
         for (String ip : vizinhos.keySet()) {
+            Socket vizinho = null;
+            PrintWriter escritor = null;
 
-            new Thread(() -> {
-                Socket vizinho = null;
-                PrintWriter escritor = null;
+            try {
+                vizinho = new Socket("localhost", this.vizinhos.get(ip));
+                escritor = new PrintWriter(vizinho.getOutputStream(), true);
 
+                escritor.println(this.ip + "-ok?/");
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
                 try {
-                    vizinho = new Socket("localhost", this.vizinhos.get(ip));
-                    escritor = new PrintWriter(vizinho.getOutputStream(), true);
-
-                    escritor.println(this.ip + "-ok?/");
-
+                    if (escritor != null) escritor.close();
+                    if (vizinho != null) vizinho.close();
                 } catch (IOException e) {
                     e.printStackTrace();
-                } finally {
-                    try {
-                        if (escritor != null) escritor.close();
-                        if (vizinho != null) vizinho.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
                 }
-            }).start();
+            }
         }
     }
 
@@ -616,12 +630,33 @@ public class Bootstraper {
     }
 
 
+    private  void  escritor_vizinho(int porta_do_Node_a_enviar, String mensagem)throws IOException{
+
+        Socket vizinho_a_enviar;
+        PrintWriter escritor;
+
+        vizinho_a_enviar = new Socket("localhost", porta_do_Node_a_enviar);
+        escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
+
+        escritor.println(mensagem);
+
+        System.out.println("Enviei estes vizinhos: " + mensagem + "para este Node " + porta_do_Node_a_enviar);
+        try {
+            escritor.close();
+            vizinho_a_enviar.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
     private  void  escritor_vizinho(String ip_do_vizinho_a_enviar, String mensagem)throws IOException{
 
         Socket vizinho_a_enviar;
         PrintWriter escritor;
         int porta_vizinho;
 
+        System.out.println(this.vizinhos.get(ip_do_vizinho_a_enviar));
         porta_vizinho = this.vizinhos.get(ip_do_vizinho_a_enviar);
 
         vizinho_a_enviar = new Socket("localhost", porta_vizinho);
@@ -629,6 +664,7 @@ public class Bootstraper {
 
         escritor.println(mensagem);
 
+        System.out.println("Enviei estes vizinhos: " + mensagem + "para este Node " + ip_do_vizinho_a_enviar);
         try {
             escritor.close();
             vizinho_a_enviar.close();

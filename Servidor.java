@@ -25,6 +25,13 @@ public class Servidor {
     // ip -> [men]
     private final HashMap<String, ArrayList<String>> fila_de_espera = new HashMap<>();
 
+
+    public Servidor(int porta, int porta_strems, int porta_RP){
+        this.porta = porta;
+        this.porta_strems = porta_strems;
+        this.porta_RP = porta_RP;
+    }
+
     private void SmartPut(String ip, String mensagem, HashMap<String, ArrayList<String>> fila) {
         ArrayList<String> temp;
         if ((temp = fila.get(ip)) != null) temp.add(mensagem);
@@ -37,25 +44,29 @@ public class Servidor {
 
     }
 
-    public void inicializador(){
-        servidor();
+
+    private boolean IsEmpty(HashMap<String, ArrayList<String>> emp){
+        boolean res = true;
+        for (String s: emp.keySet()) {
+            if ( (emp.get(s).isEmpty() == false) ) {res = false; break;}
+        }
+        return res;
     }
 
-    public Servidor(int porta, int porta_strems, int porta_RP){
-        this.porta = porta;
-        this.porta_strems = porta_strems;
-        this.porta_RP = porta_RP;
+    public void inicializador(){
+        servidor();
     }
 
     private void servidor() {
         // Uma especie de recessionista
         new Thread(() -> {
-            try (ServerSocket ouvinte_mestre = new ServerSocket(this.porta)) {
-                // ligação entre um vizinho e 'eu' (eu sou um Node)
+
 
                 // Thread para leitura de mensagens de todos os seus vizinhos
                 new Thread(() -> {
                     try {
+                        // ligação entre o RP  e 'eu' (eu sou um Servidor)
+                        ServerSocket ouvinte_mestre = new ServerSocket(this.porta);
                         String mensagem;
                         while (true) {
                             Socket ouvinte = ouvinte_mestre.accept();
@@ -81,7 +92,7 @@ public class Servidor {
                 // uma especie de capataz
                 new Thread(() -> {
                     while (true) {
-                        if (!this.fila_de_espera.values().isEmpty()) {
+                        if (!IsEmpty(this.fila_de_espera)) {
                             String mensagem;
                             String ip;
                             try {
@@ -123,9 +134,6 @@ public class Servidor {
                     }
                 }).start();
 
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }).start();
     }
 
@@ -136,7 +144,7 @@ public class Servidor {
                 while (true) {
 
                     // Dados a serem enviados como bytes
-                    byte[] data = "Hello, servidor!".getBytes();
+                    byte[] data = "Ola meu simpatico cliente!".getBytes();
 
                     // Cria um DataOutputStream para facilitar a escrita de dados binários
                     ByteArrayOutputStream byteStream = new ByteArrayOutputStream();

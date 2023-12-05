@@ -105,6 +105,20 @@ public class Cliente {
         }
 
     }
+
+    private boolean IsEmpty(HashMap<String, ArrayList<String>> emp){
+        boolean res = true;
+        try {
+            l_fila_de_espera.lock();
+
+            for (String s: emp.keySet()) {
+                if ( (emp.get(s).isEmpty() == false) ) {res = false; break;}
+            }
+        }finally {l_fila_de_espera.unlock();}
+
+        return res;
+    }
+
     public void inicializador(){
         servidor();
     }
@@ -113,12 +127,12 @@ public class Cliente {
     private void servidor() {
         // Uma especie de recessionista
         new Thread(() -> {
-            try (ServerSocket ouvinte_mestre = new ServerSocket(this.porta)) {
-                // ligação entre um vizinho e 'eu' (eu sou um Node)
 
                 // Thread para leitura de mensagens de todos os seus vizinhos
                 new Thread(() -> {
                     try {
+                        // ligação entre um Node folha e 'eu' (eu sou um cliente)
+                        ServerSocket ouvinte_mestre = new ServerSocket(this.porta);
                         Socket ouvinte = ouvinte_mestre.accept();
                         BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
                         String mensagem;
@@ -143,10 +157,8 @@ public class Cliente {
                 // uma especie de capataz
                 new Thread(() -> {
                     try {
-                        Socket escritor = ouvinte_mestre.accept();
-                        PrintWriter escritor_vizinho = new PrintWriter(escritor.getOutputStream());
                         while (true) {
-                            if (!this.fila_de_espera.values().isEmpty()) {
+                            if (!IsEmpty (this.fila_de_espera) ){
                                 Thread t1;
                                 String mensagem;
                                 String ip;
@@ -166,7 +178,7 @@ public class Cliente {
                                     case "metrica" -> {
                                         this.latencia -= System.currentTimeMillis();
                                         String nova_arvore = this.ip + "," + this.latencia + "," + ip;
-                                        escritor_vizinho.println(this.ip + "-" + "Stream?/" + nova_arvore);
+                                        escritor_vizinho(this.ip + "-" + "Stream?/" + nova_arvore);
                                     }
                                     case "Arvore" -> {
                                         try {
@@ -200,9 +212,9 @@ public class Cliente {
                                         } finally {
                                             l_arvores_completas.unlock();
                                         }
-                                        escritor_vizinho.println(this.ip + "-ArvoreAtualizada/" + mensagem_split[1]);
+                                        escritor_vizinho(this.ip + "-ArvoreAtualizada/" + mensagem_split[1]);
                                     }
-                                    case "Atualiza" -> escritor_vizinho.println(this.ip + "-Atualizei/" + mensagem_split[1]);
+                                    case "Atualiza" -> escritor_vizinho(this.ip + "-Atualizei/" + mensagem_split[1]);
                                     default -> System.out.println("Mensagem inválida");
                                 }
                             }
@@ -212,10 +224,26 @@ public class Cliente {
                     }
                 }).start();
 
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        });
+        }).start();
+    }
+
+    private  void  escritor_vizinho(String mensagem)throws IOException{
+
+        Socket vizinho_a_enviar;
+        PrintWriter escritor;
+
+        vizinho_a_enviar = new Socket("localhost", this.porta_do_node_folha);
+        escritor = new PrintWriter(vizinho_a_enviar.getOutputStream(), true);
+
+        escritor.println(mensagem);
+
+        try {
+            escritor.close();
+            vizinho_a_enviar.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
     }
 
     // recetor e propagador de strems

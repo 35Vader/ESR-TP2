@@ -108,13 +108,17 @@ public class RP {
     public void inicializa() throws IOException {
         // preparar servidor
         servidor();
-        // spleep ??
+    }
+
+    public void PedeVizinhos() throws IOException {
         //primeira fase
         requestVizinhos();
-        // spleep ??
+
+    }
+
+    public void TudoOK(){
         // segunda fase
         okVizinhos();
-
     }
 
     private static String EspelhaInverte(String arvore) {
@@ -232,6 +236,19 @@ public class RP {
 
     }
 
+    private boolean IsEmpty(HashMap<String, ArrayList<String>> emp){
+        boolean res = true;
+        try {
+            l_fila_de_espera.lock();
+
+            for (String s: emp.keySet()) {
+                if ( (emp.get(s).isEmpty() == false) ) {res = false; break;}
+            }
+        }finally {l_fila_de_espera.unlock();}
+
+        return res;
+    }
+
     private String ChooseKey(HashMap<String, ArrayList<String>> fila) {
         Set<String> v = new HashSet<>(); // vizinhos que mandaram mensagues
 
@@ -261,6 +278,10 @@ public class RP {
             this.vizinhos.put(vizinho[0], Integer.parseInt(vizinho[1]));
 
             this.vizinhos_udp.put(vizinho[0], Integer.parseInt(vizinho[2]));
+
+            for (String ip: this.vizinhos.keySet()) {
+                System.out.println( "o vizinho " + ip + " tem a porta " + this.vizinhos.get(ip));
+            }
         }
     }
 
@@ -268,13 +289,15 @@ public class RP {
     private void servidor() {
         // Uma especie de recessionista
         new Thread(() -> {
-            try (ServerSocket ouvinte_mestre = new ServerSocket(this.porta)) {
-                // ligação entre um vizinho e 'eu' (eu sou um Node)
+
 
                 // Thread para leitura de mensagens de todos os seus vizinhos
                 new Thread(() -> {
                     try {
+                        System.out.println("Pronto para receber");
                         String mensagem;
+                        // ligação entre um vizinho e 'eu' (eu sou um Node)
+                        ServerSocket ouvinte_mestre = new ServerSocket(this.porta);
                         while (true) {
                             Socket ouvinte = ouvinte_mestre.accept();
                             BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
@@ -299,8 +322,9 @@ public class RP {
                 // uma especie de capataz
                 new Thread(() -> {
                     try {
+                        System.out.println("Pronto para enviar");
                         while (true) {
-                            if (!this.fila_de_espera.values().isEmpty()) {
+                            if (!IsEmpty(this.fila_de_espera)) {
                                 String mensagem;
                                 String ip;
                                 try {
@@ -329,6 +353,7 @@ public class RP {
                                         } finally {
                                             l_ok.unlock();
                                         }
+                                        System.out.println();
                                         break;
 
                                     case "Vizinhos":
@@ -448,11 +473,7 @@ public class RP {
                         e.printStackTrace();
                     }
                 }).start();
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        });
+        }).start();
     }
 
     // recetor e propagador de strems
@@ -493,7 +514,7 @@ public class RP {
         bootstraper = new Socket("localhost", porta_bootstraper);
         escritor = new PrintWriter(bootstraper.getOutputStream(), true);
 
-        escritor.println(this.ip + "-" + "Vizinhos/");
+        escritor.println(this.ip + "-" + "Vizinhos/" + this.porta);
 
         try {
             escritor.close();
@@ -506,30 +527,26 @@ public class RP {
 
     //fase para ver se os vizinhos estão ok
     private void okVizinhos() {
-
         for (String ip : vizinhos.keySet()) {
+            Socket vizinho = null;
+            PrintWriter escritor = null;
 
-            new Thread(() -> {
-                Socket vizinho = null;
-                PrintWriter escritor = null;
+            try {
+                vizinho = new Socket("localhost", this.vizinhos.get(ip));
+                escritor = new PrintWriter(vizinho.getOutputStream(), true);
 
+                escritor.println(this.ip + "-ok?/");
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
                 try {
-                    vizinho = new Socket("localhost", this.vizinhos.get(ip));
-                    escritor = new PrintWriter(vizinho.getOutputStream(), true);
-
-                    escritor.println(this.ip + "-ok?/");
-
+                    if (escritor != null) escritor.close();
+                    if (vizinho != null) vizinho.close();
                 } catch (IOException e) {
                     e.printStackTrace();
-                } finally {
-                    try {
-                        if (escritor != null) escritor.close();
-                        if (vizinho != null) vizinho.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
                 }
-            }).start();
+            }
         }
     }
 
