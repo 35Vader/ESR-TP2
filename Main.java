@@ -28,11 +28,13 @@ public class Main {
             vizinhos_dois_tcp.put("1.1.1.1",1111);// Node1
             vizinhos_dois_tcp.put("5.5.5.5",5555); // Bootstraper ou Node5
             vizinhos_dois_tcp.put("3.3.3.3",3333); // Node3
+            vizinhos_dois_tcp.put("7.7.7.7",7777); // cliente
 
             HashMap<String,Integer> vizinhos_dois_udp = new HashMap<>();
             vizinhos_dois_udp.put("1.1.1.1",1110);// Node1
             vizinhos_dois_udp.put("5.5.5.5",5550); // Bootstraper ou Node5
             vizinhos_dois_udp.put("3.3.3.3",3330); // Node3
+            vizinhos_dois_udp.put("7.7.7.7",7770); // cliente
 
 
             bootstraper.setTopologia("2.2.2.2",vizinhos_dois_tcp,vizinhos_dois_udp);
@@ -85,9 +87,7 @@ public class Main {
 
             MakeBootstraper(cinco);
 
-            servidor.inicializador();
             cinco.inicializa();
-
             Thread.sleep(30);
 
             //primeira fase
@@ -96,8 +96,9 @@ public class Main {
             tres.inicializa();
             quatro.inicializa();
             seis.inicializa();
+            professorLima.ligacao();
 
-            Thread.sleep(30);
+            Thread.sleep(50);
 
             //segunda fase
             um.PedeVizinhos();
@@ -106,7 +107,7 @@ public class Main {
             quatro.PedeVizinhos();
             seis.PedeVizinhos();
 
-            Thread.sleep(30);
+            Thread.sleep(100);
 
             //terceira fase
             um.TudoOK();
@@ -115,5 +116,15 @@ public class Main {
             quatro.TudoOK();
             seis.TudoOK();
             cinco.TudoOK();
+            professorLima.TudoOK();
+
+            Thread.sleep(40);
+
+            // quarta fase
+            servidor.inicializador();
+            Thread.sleep(30);
+
+            // quinta fase a stream em sí
+            professorLima.QueroStream();
     }
 }

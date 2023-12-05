@@ -122,11 +122,13 @@ public class Cliente {
     }
 
     public void ligacao(){
+
         servidor();
     }
 
     public void TudoOK(){
 
+        okVizinhos();
     }
 
     //recessor geral
@@ -137,12 +139,15 @@ public class Cliente {
                 // Thread para leitura de mensagens de todos os seus vizinhos
                 new Thread(() -> {
                     try {
+                        System.out.println("Pronto para receber");
+
                         // ligação entre um Node folha e 'eu' (eu sou um cliente)
                         ServerSocket ouvinte_mestre = new ServerSocket(this.porta);
-                        Socket ouvinte = ouvinte_mestre.accept();
-                        BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
                         String mensagem;
                         while (true) {
+                            Socket ouvinte = ouvinte_mestre.accept();
+                            BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
+
                             //ip-tipo/mensg
                             mensagem = leitor_vizinho.readLine();
                             // [ip,tipo/mensg]
@@ -153,7 +158,7 @@ public class Cliente {
                             } finally {
                                 l_fila_de_espera.unlock();
                             }
-
+                            leitor_vizinho.close();
                         }
                     } catch (IOException e) {
                         e.printStackTrace();
@@ -194,8 +199,12 @@ public class Cliente {
                                         break;
 
                                     case "metrica":
-                                        this.latencia -= System.currentTimeMillis();
-                                        String nova_arvore = this.ip + "," + this.latencia + "," + ip;
+
+                                        long tempy = System.currentTimeMillis() - this.latencia;
+                                        String nova_arvore = this.ip + "," + tempy + "," + ip;
+
+                                        System.out.println("Eu "+ this.ip+ " vou enviar esta arvore "+ nova_arvore );
+
                                         escritor_vizinho(this.ip + "-" + "Stream?/" + nova_arvore);
                                         break;
 
@@ -209,6 +218,7 @@ public class Cliente {
                                         } finally {
                                             l_arvores_completas.unlock();
                                         }
+                                        System.out.println("Eu "+ this.ip+ " vou guardar esta arvore "+ mensagem_split[1]);
                                         this.QueroStream();
                                         break;
 
@@ -275,12 +285,14 @@ public class Cliente {
 
     // recetor e propagador de strems
     private void servidor_stream() {
+        System.out.println("Vou finalmente ver a stream " + this.ip);
         try (DatagramSocket socket = new DatagramSocket(this.porta_strems)) {
             try {
                 byte[] receiveData = new byte[1024];
                 while (true) {
                     DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
                     socket.receive(receivePacket);
+
 
                     // Converte os bytes recebidos para um DataInputStream
                     ByteArrayInputStream byteStream = new ByteArrayInputStream(receivePacket.getData());
@@ -290,6 +302,10 @@ public class Cliente {
                     int length = dataInputStream.readInt();
                     byte[] data = new byte[length];
                     dataInputStream.readFully(data);
+
+                    // mostra a stream
+                    String resposta = new String(receivePacket.getData(), 0, receivePacket.getLength());
+                    System.out.println("Stream: " + resposta);
 
                 }
             } catch (IOException e) {
@@ -302,25 +318,56 @@ public class Cliente {
 
     public void QueroStream() throws IOException{
 
-        Socket bootstraper;
+        Socket nodo_folha;
         PrintWriter escritor;
 
-        bootstraper = new Socket(ip, porta_do_node_folha);
-        escritor = new PrintWriter(bootstraper.getOutputStream(), true);
-        if(!this.arvores_completas.get(ip_do_node_folha).getEstado()){
+        nodo_folha = new Socket("localhost", porta_do_node_folha);
+        escritor = new PrintWriter(nodo_folha.getOutputStream(), true);
+        if(this.arvores_completas.isEmpty()){
 
             this.latencia = System.currentTimeMillis();
             escritor.println(this.ip + "-" + "metricas?/ " );
+            System.out.println("Cliente: Bolas! Não existem arvores! vou madar flow");
         }
-        else escritor.println(this.ip + "-" + "Stream?/");
+        else {
+
+            escritor.println(this.ip + "-" + "Stream?/" + this.arvores_completas.get(this.ip_do_node_folha).getArvore());
+            System.out.println("Fixe! já posso pedir stream já existe arvore que é esta "
+                    + this.arvores_completas.get(this.ip_do_node_folha).getArvore());
+        }
 
         try {
             escritor.close();
-            bootstraper.close();
+            nodo_folha.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
+
+
+    //fase para ver se os vizinhos estão ok
+    private void okVizinhos() {
+            Socket vizinho = null;
+            PrintWriter escritor = null;
+
+            try {
+                 vizinho = new Socket("localhost", this.porta_do_node_folha);
+                 escritor = new PrintWriter(vizinho.getOutputStream(), true);
+
+                escritor.println(this.ip + "-ok?/");
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                try {
+                    if (escritor != null) escritor.close();
+                    if (vizinho != null) vizinho.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
 
     public void NaoQueroStream() throws IOException {
         String arvore_a_desativar;

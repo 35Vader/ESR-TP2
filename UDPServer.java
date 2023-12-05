@@ -7,6 +7,9 @@ import java.net.SocketException;
 import java.io.*;
 import java.net.*;
 
+import java.io.*;
+import java.net.*;
+
 public class UDPServer {
     public static void main(String[] args) {
         final int porta = 12345;
@@ -36,13 +39,20 @@ public class UDPServer {
                     dataInputStream.readFully(data);
 
                     // Processa os dados recebidos como bytes
-                    System.out.println("Cliente enviou " + length + " bytes.");
+                    String mensagemCliente = new String(data);
+                    System.out.println("Cliente enviou: " + mensagemCliente);
 
                     // Envia uma resposta ao cliente
-                    String resposta = "Servidor recebeu " + length + " bytes.";
+                    String resposta = "Servidor recebeu: " + mensagemCliente + ". Enviando 'ola cliente'.";
                     byte[] sendData = resposta.getBytes();
-                    DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, InetAddress.getByName("localhost"), clientPort);
+                    DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, clientAddress, clientPort);
                     socket.send(sendPacket);
+
+                    // Agora envia "ola cliente" de volta para o cliente
+                    String mensagemParaCliente = "ola cliente";
+                    byte[] sendDataCliente = mensagemParaCliente.getBytes();
+                    DatagramPacket sendPacketCliente = new DatagramPacket(sendDataCliente, sendDataCliente.length, clientAddress, clientPort);
+                    socket.send(sendPacketCliente);
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -56,7 +66,7 @@ public class UDPServer {
                 InetAddress serverAddress = InetAddress.getByName("localhost");
 
                 // Dados a serem enviados como bytes
-                byte[] data = "Hello, servidor!".getBytes();
+                byte[] data = "ola".getBytes();
 
                 // Cria um DataOutputStream para facilitar a escrita de dados binários
                 ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
@@ -70,7 +80,7 @@ public class UDPServer {
                 byte[] sendData = byteStream.toByteArray();
 
                 // Envia os dados ao servidor
-                DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length,InetAddress.getByName("localhost") , porta);
+                DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, InetAddress.getByName("localhost"), porta);
                 socket.send(sendPacket);
 
                 // Recebe a resposta do servidor
@@ -84,4 +94,5 @@ public class UDPServer {
                 e.printStackTrace();
             }
         }).start();
-    }}
+    }
+}

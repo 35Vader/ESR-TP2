@@ -164,7 +164,7 @@ public class Node {
         for (Integer i : this.arvores_completas.keySet()) {
             latencias_totais[i - 1] = GetLatencia(this.arvores_completas.get(i)[1]);
         }
-        return this.arvores_completas.get(mini(latencias_totais))[0];
+        return QuemEnviarTopDown( this.arvores_completas.get(mini(latencias_totais))[1]);
     }
 
     private String QuemEnviarBottomUp(String arvore) {
@@ -279,7 +279,7 @@ public class Node {
                             } finally {
                                 l_fila_de_espera.unlock();
                             }
-
+                            leitor_vizinho.close();
                         }
                     } catch (IOException e) {
                         e.printStackTrace();
@@ -411,18 +411,22 @@ public class Node {
                                                 } else {
 
                                                     if (this.arvores_completas.size() == 1) {
-                                                        sendTree(this.arvores_completas.get(1)[0]);
+                                                        String ip_a_enviar = QuemEnviarTopDown(this.arvores_completas.get(1)[1]);
+                                                        sendTree(ip_a_enviar);
+                                                        System.out.println("Eu "+ this.ip + " vou enviar este ip: " + ip_a_enviar);
                                                     }
 
                                                     if (this.arvores_completas.size() > 1) {
                                                         String ip_enviar = ChooseTree();
                                                         sendTree(ip_enviar);
+                                                        System.out.println("Eu "+ this.ip + "vou enviar este ip: " + ip_enviar);
                                                     }
                                                 }
                                             } finally {
                                                 l_arvores_completas.unlock();
                                             }
                                         } else {
+                                            System.out.println("Hora de fazer multicast");
                                            Thread t1 = new Thread(() -> servidor_stream(ip));
                                             try {
                                                 l_thread.lock();
@@ -449,6 +453,8 @@ public class Node {
 
                                         Thread t = new Thread( () -> AddArvore(mensagem_split[1],ip) );
                                         t.start();
+
+                                        System.out.println("Eu "+ this.ip + "estou pronto para stremar!!!");
                                         break;
 
                                     case "Acabou":
@@ -508,6 +514,7 @@ public class Node {
 
                                     default:
                                         System.out.println("Mensagem inválida");
+                                        System.out.println(this.ip);
                                 }
                             }
                         }

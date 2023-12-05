@@ -9,6 +9,9 @@ public class RP {
     // flag se diz se eu estou a stremar ou não
     private boolean Stremar = false;
 
+    // numero de arvores ativas
+    private int numero_arvores_ativas = 0;
+
     // porta do bootstraper
     private final int porta_bootstraper;
 
@@ -121,37 +124,20 @@ public class RP {
         okVizinhos();
     }
 
-    private static String EspelhaInverte(String arvore) {
-        String[] groups = arvore.split("!");
-        StringBuilder result = new StringBuilder();
-
-        for (String group : groups) {
-            String[] elements = group.split(",");
-            StringBuilder reversedGroup = new StringBuilder();
-
-            // Reverse the order of elements within the group
-            for (int i = elements.length - 1; i >= 0; i--) {
-                reversedGroup.append(reverseString(elements[i]));
-
-                if (i > 0) {
-                    reversedGroup.append(",");
-                }
-            }
-
-            result.append(reversedGroup);
-
-            if (!result.toString().equals(groups[groups.length - 1])) {
-                result.append("!");
-            }
+    public static String EspelhaInverte(String input) {
+        if (input.endsWith(",") || input.endsWith("!")) {
+            input = input.substring(0, input.length() - 1);
         }
 
-        return result.toString();
-    }
+        String[] parts = input.split(",");
 
-    private static String reverseString(String str) {
-        return new StringBuilder(str).reverse().toString();
-    }
+        String reversed = "";
+        for (int i = parts.length - 1; i >= 0; i--) {
+            reversed += parts[i] + (i == 0 ? "" : ",");
+        }
 
+        return reversed;
+    }
 
     private void AtualizaArvores(String ip, String arvore_atualizada){
 
@@ -312,7 +298,7 @@ public class RP {
                             } finally {
                                 l_fila_de_espera.unlock();
                             }
-
+                            leitor_vizinho.close();
                         }
                     } catch (IOException e) {
                         e.printStackTrace();
@@ -380,16 +366,19 @@ public class RP {
                                         // a stream demora 10 milesegundos
                                         String arvore_e_i;
                                         try {
+
                                             l_arvore_escolhas.lock();
+                                            System.out.println("Esta é a arvore que recebi: " + mensagem_split[1]);
                                             // arvore espelhada e invertida
                                             arvore_e_i = EspelhaInverte(mensagem_split[1]);
+                                            System.out.println("Esta é a arvore espelhada: " + arvore_e_i);
                                             long latencia_da_arvore = GetLatencia(arvore_e_i);
                                             ArvoreLatencia temp = new ArvoreLatencia(arvore_e_i,latencia_da_arvore);
                                             SmartPut2(ip,temp);
                                         } finally {
                                             l_arvore_escolhas.unlock();
                                         }
-                                        sendArvoreAtiva(ip,arvore_e_i);
+                                        if (this.numero_arvores_ativas == 0){ sendArvoreAtiva(ip,arvore_e_i); this.numero_arvores_ativas++;}
                                         break;
 
                                     case "Stream?":
@@ -401,6 +390,7 @@ public class RP {
                                         }finally {l_thread.unlock();}
                                         t1.start();
 
+                                        System.out.println("Eu "+ this.ip + "estou pronto para stremar!!!");
                                         if (!Stremar) {
                                             try {
                                                 l_arvore_escolhas.lock();
@@ -409,6 +399,7 @@ public class RP {
                                                         sendSream(ip,bestTree);
                                                         this.Stremar = true;
                                                         sendSreamServer(ip);
+                                                        System.out.println("RP: Preparem as vossas threads de stream !!");
                                                     }
 
                                                     else{
@@ -416,6 +407,7 @@ public class RP {
                                                         sendSream(ip,bestTree);
                                                         this.Stremar = true;
                                                         sendSreamServer(ip);
+                                                        System.out.println("RP: Preparem as vossas threads de stream !!");
                                                     }
 
                                             } finally { l_arvore_escolhas.unlock();}
@@ -480,10 +472,13 @@ public class RP {
     private void servidor_stream(String ip_vizinho) {
         try (DatagramSocket socket = new DatagramSocket(this.porta_strems)) {
             try {
+
                 byte[] receiveData = new byte[1024];
                 while (true) {
                     DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
                     socket.receive(receivePacket);
+
+                    System.out.println("Passou");
 
                     // Converte os bytes recebidos para um DataInputStream
                     ByteArrayInputStream byteStream = new ByteArrayInputStream(receivePacket.getData());

@@ -30,7 +30,7 @@ public class Bootstraper {
     //lock das listas de latencias
     private final ReentrantLock l_lantencia = new ReentrantLock();
 
-    // lock da lista de mensagem de caminhos
+    // lock da lista de arvores_incompletas de caminhos
     private final ReentrantLock l_mensagem = new ReentrantLock();
 
     ///lock da fila de espera;
@@ -64,7 +64,7 @@ public class Bootstraper {
     private final HashMap<String, String> estados_de_vizinhos = new HashMap<>();
 
     //ip do que me enviou Arvore? -> arvore incompleta
-    private final HashMap<String, String> mensagem = new HashMap<>();
+    private final HashMap<String, String> arvores_incompletas = new HashMap<>();
 
     // ip vizinhos que quero medir as latencia -> tempo que mandei a mensaguem
     private final HashMap<String, Long> latencia = new HashMap<>();
@@ -290,6 +290,7 @@ public class Bootstraper {
                             } finally {
                                 l_fila_de_espera.unlock();
                             }
+                            leitor_vizinho.close();
 
                         }
                     } catch (IOException e) {
@@ -350,7 +351,7 @@ public class Bootstraper {
                                         break;
 
                                     case "metricas?":
-                                        // envio uma mensagem metrica para o vizinho que me pediu para medir as métricas
+                                        // envio uma arvores_incompletas metrica para o vizinho que me pediu para medir as métricas
                                         escritor_vizinho(ip, this.ip + "-metrica/" + mensagem_split[1]);
                                         break;
 
@@ -369,7 +370,7 @@ public class Bootstraper {
                                         // as metricas atualizadas
                                         try {
                                             l_mensagem.lock();
-                                            String arvore = this.mensagem.get(mensagem_split[1]);
+                                            String arvore = this.arvores_incompletas.get(mensagem_split[1]);
                                             arvore_atualizada = arvore + "!" + this.ip + "," + latencia + "," + ip;
                                         } finally {
                                             l_mensagem.unlock();
@@ -384,7 +385,7 @@ public class Bootstraper {
                                         // a stream demora 10 milesegundos
                                         try {
                                             l_mensagem.lock();
-                                            this.mensagem.put(ip, mensagem_split[1]);
+                                            this.arvores_incompletas.put(ip, mensagem_split[1]);
                                         } finally {
                                             l_mensagem.unlock();
                                         }
@@ -415,7 +416,7 @@ public class Bootstraper {
 
                                                     try {
                                                         l_mensagem.lock();
-                                                        this.mensagem.put(ip,mensagem_split[1]);
+                                                        this.arvores_incompletas.put(ip,mensagem_split[1]);
                                                     } finally {
                                                         l_mensagem.unlock();
                                                     }
@@ -436,6 +437,7 @@ public class Bootstraper {
                                                 l_arvores_completas.unlock();
                                             }
                                         } else {
+                                            System.out.println("Hora de fazer multicast");
                                             Thread t1 = new Thread(() -> servidor_stream(ip));
                                             try {
                                                 l_thread.lock();
@@ -462,6 +464,8 @@ public class Bootstraper {
 
                                         Thread t = new Thread( () -> AddArvore(mensagem_split[1],ip) );
                                         t.start();
+
+                                        System.out.println("Eu "+ this.ip + "estou pronto para stremar!!!");
                                         break;
 
                                     case "Acabou":
@@ -640,7 +644,7 @@ public class Bootstraper {
 
         escritor.println(mensagem);
 
-        System.out.println("Enviei estes vizinhos: " + mensagem + "para este Node " + porta_do_Node_a_enviar);
+        //System.out.println("Enviei estes vizinhos: " + arvores_incompletas + "para este Node " + porta_do_Node_a_enviar);
         try {
             escritor.close();
             vizinho_a_enviar.close();
@@ -664,7 +668,7 @@ public class Bootstraper {
 
         escritor.println(mensagem);
 
-        System.out.println("Enviei estes vizinhos: " + mensagem + "para este Node " + ip_do_vizinho_a_enviar);
+        //System.out.println("Enviei estes vizinhos: " + arvores_incompletas + "para este Node " + ip_do_vizinho_a_enviar);
         try {
             escritor.close();
             vizinho_a_enviar.close();

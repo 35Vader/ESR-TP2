@@ -114,16 +114,25 @@ public class Servidor {
                             switch (mensagem_split[0]) {
 
                                 case "SendStream":
+                                    System.out.println("Preparados ou não aqui vou eu stremar");
                                     Thread t1 = new Thread(() -> servidor_stream());
                                     try {
                                         l_thread.lock();
                                         lista_threads.put(ip,t1);
                                     }finally {l_thread.unlock();}
+
+                                    try {
+                                        Thread.sleep(300);
+                                    } catch (InterruptedException e) {
+                                        e.printStackTrace();
+                                    }
+
                                     t1.start();
                                     break;
 
                                 case "Acabou":
                                     Thread t;
+                                    System.out.println("Espero que têm gostado da stream :) ");
                                     try {
                                         l_thread.lock();
                                         t = lista_threads.get(ip);
@@ -141,14 +150,15 @@ public class Servidor {
         }).start();
     }
 
-    // recetor e propagador de strems
     private void servidor_stream() {
         try (DatagramSocket socket = new DatagramSocket(this.porta_strems)) {
             try {
                 while (true) {
+                    // Ler dados do arquivo
+                    ///String dados = lerDadosDoArquivo("stream.txt");
 
                     // Dados a serem enviados como bytes
-                    byte[] data = "Ola meu simpatico cliente!".getBytes();
+                    byte[] data = "Olá".getBytes();
 
                     // Cria um DataOutputStream para facilitar a escrita de dados binários
                     ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
@@ -162,9 +172,8 @@ public class Servidor {
                     byte[] sendData = byteStream.toByteArray();
 
                     // Envia os dados ao RP
-                    DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, InetAddress.getByName("localhost") , porta_RP);
+                    DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, InetAddress.getByName("localhost"), porta_RP);
                     socket.send(sendPacket);
-
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -172,6 +181,17 @@ public class Servidor {
         } catch (SocketException e) {
             e.printStackTrace();
         }
+    }
+
+    private String lerDadosDoArquivo(String caminhoArquivo) throws IOException {
+        StringBuilder conteudo = new StringBuilder();
+        try (BufferedReader br = new BufferedReader(new FileReader(caminhoArquivo))) {
+            String linha;
+            while ((linha = br.readLine()) != null) {
+                conteudo.append(linha).append("\n");
+            }
+        }
+        return conteudo.toString();
     }
 
 
