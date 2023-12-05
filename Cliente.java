@@ -8,6 +8,8 @@ public class Cliente {
     // ip do Cliente
     private final String ip;
 
+    private  String estado_node_folha = "";
+
     // flag de estar a receber stream ou não
     private boolean ReceberStream = true;
 
@@ -119,8 +121,12 @@ public class Cliente {
         return res;
     }
 
-    public void inicializador(){
+    public void ligacao(){
         servidor();
+    }
+
+    public void TudoOK(){
+
     }
 
     //recessor geral
@@ -175,12 +181,25 @@ public class Cliente {
                                 String[] mensagem_split = mensagem.split("/");
 
                                 switch (mensagem_split[0]) {
-                                    case "metrica" -> {
+
+                                    case "ok?":
+                                        // digo o meu estado ao vizinho que me enviou
+                                        escritor_vizinho(this.ip + "-ok/");
+                                        break;
+
+                                    case "ok":
+                                        this.estado_node_folha = "ok";
+
+                                        System.out.println("O meu vizinho " + ip + " está ok!");
+                                        break;
+
+                                    case "metrica":
                                         this.latencia -= System.currentTimeMillis();
                                         String nova_arvore = this.ip + "," + this.latencia + "," + ip;
                                         escritor_vizinho(this.ip + "-" + "Stream?/" + nova_arvore);
-                                    }
-                                    case "Arvore" -> {
+                                        break;
+
+                                    case "Arvore":
                                         try {
                                             // Rp tem este ip 121.191.51.101
                                             //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore que o RP escolheu
@@ -191,9 +210,10 @@ public class Cliente {
                                             l_arvores_completas.unlock();
                                         }
                                         this.QueroStream();
-                                    }
-                                    case "Stream" -> {
-                                        //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa
+                                        break;
+
+                                    //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa
+                                    case "Stream":
                                         try {
                                             l_arvores_completas.lock();
                                             this.arvores_completas.get(ip).setEstado(true);
@@ -203,9 +223,10 @@ public class Cliente {
                                         this.ReceberStream = true;
                                         t1 = new Thread(this::servidor_stream);
                                         t1.start();
-                                    }
-                                    case "Atualiza?" -> {
-                                        //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa atualizada totalmente
+                                        break;
+
+                                    //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa atualizada totalmente
+                                    case "Atualiza?":
                                         try {
                                             l_arvores_completas.lock();
                                             this.arvores_completas.get(ip).setArvore(mensagem_split[1]);
@@ -213,9 +234,15 @@ public class Cliente {
                                             l_arvores_completas.unlock();
                                         }
                                         escritor_vizinho(this.ip + "-ArvoreAtualizada/" + mensagem_split[1]);
-                                    }
-                                    case "Atualiza" -> escritor_vizinho(this.ip + "-Atualizei/" + mensagem_split[1]);
-                                    default -> System.out.println("Mensagem inválida");
+                                        break;
+
+                                    case "Atualiza":
+                                        escritor_vizinho(this.ip + "-Atualizei/" + mensagem_split[1]);
+                                        break;
+
+                                    default:
+                                        System.out.println("Mensagem inválida");
+                                        break;
                                 }
                             }
                         }

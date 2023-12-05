@@ -44,12 +44,16 @@ public class Servidor {
 
     }
 
-
     private boolean IsEmpty(HashMap<String, ArrayList<String>> emp){
         boolean res = true;
-        for (String s: emp.keySet()) {
-            if ( (emp.get(s).isEmpty() == false) ) {res = false; break;}
-        }
+        try {
+            l_fila_de_espera.lock();
+
+            for (String s: emp.keySet()) {
+                if ( (emp.get(s).isEmpty() == false) ) {res = false; break;}
+            }
+        }finally {l_fila_de_espera.unlock();}
+
         return res;
     }
 

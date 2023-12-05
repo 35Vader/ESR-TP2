@@ -74,20 +74,23 @@ public class Main {
 
     public static void main(String[] args) throws IOException, InterruptedException {
 
-            Node um             = new Node("1.1.1.1",1111,5555,1110);
-            Node dois           = new Node("2.2.2.2",2222,5555,2220);
-            Node tres           = new Node("3.3.3.3",3333,5555,3330);
-            Node quatro         = new Node("4.4.4.4",4444,5555,4440);
-            RP seis             = new RP("6.6.6.6",6666,5555,12345,6660);
-            Servidor servidor   = new Servidor(12345,12340,6666);
-            Bootstraper cinco   = new Bootstraper("5.5.5.5",5555,5550);
+            Node um               = new Node("1.1.1.1",1111,5555,1110);
+            Node dois             = new Node("2.2.2.2",2222,5555,2220);
+            Node tres             = new Node("3.3.3.3",3333,5555,3330);
+            Node quatro           = new Node("4.4.4.4",4444,5555,4440);
+            RP seis               = new RP("6.6.6.6",6666,5555,12345,6660);
+            Servidor servidor     = new Servidor(12345,12340,6666);
+            Bootstraper cinco     = new Bootstraper("5.5.5.5",5555,5550);
+            Cliente professorLima = new Cliente("7.7.7.7",2222,"2.2.2.2",7770,7777);
 
             MakeBootstraper(cinco);
+
+            servidor.inicializador();
+            cinco.inicializa();
 
             Thread.sleep(30);
 
             //primeira fase
-            cinco.inicializa();
             um.inicializa();
             dois.inicializa();
             tres.inicializa();
