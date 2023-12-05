@@ -542,6 +542,7 @@ public class Node {
                         int length = dataInputStream.readInt();
                         byte[] data = new byte[length];
                         dataInputStream.readFully(data);
+
                         DatagramPacket sendPacket = new DatagramPacket(data, data.length, InetAddress.getByName("localhost"), this.vizinhos_udp.get(ip_vizinho));
                         socket.send(sendPacket);
 

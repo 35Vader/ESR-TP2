@@ -544,6 +544,7 @@ public class Bootstraper {
                 while (true) {
                     DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
                     socket.receive(receivePacket);
+                    System.out.println("##");
 
                     // Converte os bytes recebidos para um DataInputStream
                     ByteArrayInputStream byteStream = new ByteArrayInputStream(receivePacket.getData());

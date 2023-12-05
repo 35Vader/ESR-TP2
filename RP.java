@@ -478,8 +478,6 @@ public class RP {
                     DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
                     socket.receive(receivePacket);
 
-                    System.out.println("Passou");
-
                     // Converte os bytes recebidos para um DataInputStream
                     ByteArrayInputStream byteStream = new ByteArrayInputStream(receivePacket.getData());
                     DataInputStream dataInputStream = new DataInputStream(byteStream);
