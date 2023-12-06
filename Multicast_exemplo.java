@@ -28,7 +28,8 @@ public class Multicast_exemplo {
         vizinhos_dois_tcp.put("1.1.1.1",1111);// Node1
         vizinhos_dois_tcp.put("5.5.5.5",5555); // Bootstraper ou Node5
         vizinhos_dois_tcp.put("3.3.3.3",3333); // Node3
-        vizinhos_dois_tcp.put("7.7.7.7",7777); // cliente
+        vizinhos_dois_tcp.put("7.7.7.7",7777); // cliente professorLima
+        vizinhos_dois_tcp.put("8.8.8.8",8888); // cliente professorFlavio
 
         HashMap<String,Integer> vizinhos_dois_udp = new HashMap<>();
         vizinhos_dois_udp.put("1.1.1.1",1110);// Node1
