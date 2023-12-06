@@ -472,20 +472,29 @@ public class RP {
     private void servidor_stream(String ip_vizinho) {
         try (DatagramSocket socket = new DatagramSocket(this.porta_strems)) {
             try {
-
-                byte[] receiveData = new byte[1024];
+                byte[] receiveData;
                 while (true) {
-                    DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+                    DatagramPacket receivePacket = new DatagramPacket(new byte[1024], 1024);
                     socket.receive(receivePacket);
 
+                    // Obter o tamanho real dos dados recebidos
+                    int length = receivePacket.getLength();
+
+                    // Criar um novo array apenas com os dados válidos
+                    receiveData = Arrays.copyOf(receivePacket.getData(), length);
+                    System.out.println("Eu " +this.ip);
+
                     // Converte os bytes recebidos para um DataInputStream
-                    ByteArrayInputStream byteStream = new ByteArrayInputStream(receivePacket.getData());
+                    ByteArrayInputStream byteStream = new ByteArrayInputStream(receiveData);
                     DataInputStream dataInputStream = new DataInputStream(byteStream);
 
                     // Lê os dados do DataInputStream
-                    int length = dataInputStream.readInt();
-                    byte[] data = new byte[length];
+                    int dataLength = dataInputStream.readInt();
+                    byte[] data = new byte[dataLength];
+                    System.out.println(data.length);
                     dataInputStream.readFully(data);
+
+
                     DatagramPacket sendPacket = new DatagramPacket(data, data.length, InetAddress.getByName("localhost"), this.vizinhos_udp.get(ip_vizinho));
                     socket.send(sendPacket);
 

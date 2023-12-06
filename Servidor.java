@@ -155,14 +155,14 @@ public class Servidor {
         try (DatagramSocket socket = new DatagramSocket(this.porta_strems)) {
             try {
                 // Abre o arquivo para leitura
-                //BufferedReader reader = new BufferedReader(new FileReader("stream.txt"));
-                //String linha;
+                BufferedReader reader = new BufferedReader(new FileReader("stream.txt"));
+                String linha;
 
-                //while ((linha = reader.readLine()) != null) {
+                while ((linha = reader.readLine()) != null) {
                     // Dados a serem enviados como bytes
-                    //byte[] data = linha.getBytes();
+                    byte[] data = linha.getBytes();
 
-                    byte[] data = "Ola".getBytes();
+                    //byte[] data = "Ola".getBytes();
 
                     // Cria um DataOutputStream para facilitar a escrita de dados binários
                     ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
@@ -178,10 +178,10 @@ public class Servidor {
                     // Envia os dados ao RP
                     DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, InetAddress.getByName("localhost"), porta_RP);
                     socket.send(sendPacket);
-                //}
+                }
 
                 // Fecha o arquivo após a leitura
-                //reader.close();
+                reader.close();
             } catch (IOException e) {
                 e.printStackTrace();
             }

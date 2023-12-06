@@ -222,11 +222,28 @@ public class Cliente {
                                         this.QueroStream();
                                         break;
 
+                                    case "ArvoreNova":
+
+                                        try {
+                                            // Rp tem este ip 121.191.51.101
+                                            //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore que o RP escolheu
+                                            l_arvores_completas.lock();
+                                            ArvoreEstado temp = new ArvoreEstado(mensagem_split[1], false);
+                                            this.arvores_completas.put(ip, temp);
+                                        } finally {
+                                            l_arvores_completas.unlock();
+                                        }
+                                        System.out.println("Eu "+ this.ip+ " vou guardar esta arvore "+ mensagem_split[1]);
+
                                     //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa
                                     case "Stream":
                                         try {
                                             l_arvores_completas.lock();
-                                            this.arvores_completas.get(ip).setEstado(true);
+                                            if (this.arvores_completas.get(ip) == null){
+                                                ArvoreEstado temp = new ArvoreEstado(mensagem_split[1],true);
+                                                this.arvores_completas.put(ip,temp);
+                                            }
+                                            else this.arvores_completas.get(ip).setEstado(true);
                                         } finally {
                                             l_arvores_completas.unlock();
                                         }

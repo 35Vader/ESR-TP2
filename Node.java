@@ -12,7 +12,7 @@ public class Node {
     // ip do Node
     private final String ip;
 
-    // flag se diz se eu estou a stremar ou não
+    // lag se diz se eu estou a stremar ou não
     private boolean Stremar = false;
 
     // porta do bootstraper
@@ -81,7 +81,7 @@ public class Node {
         this.porta_strems = porta_strems;
     }
 
-    public void inicializa() throws IOException{
+    public void inicializa() {
         // preparar servidor
         servidor();
     }
@@ -230,7 +230,6 @@ public class Node {
             String[] vizinho = ip_porta.split(":");
 
             this.vizinhos.put(vizinho[0], Integer.parseInt(vizinho[1]));
-
             this.vizinhos_udp.put(vizinho[0], Integer.parseInt(vizinho[2]));
 
         }
@@ -240,13 +239,14 @@ public class Node {
         }
     }
 
+
     private boolean IsEmpty(HashMap<String, ArrayList<String>> emp){
         boolean res = true;
         try {
             l_fila_de_espera.lock();
 
             for (String s: emp.keySet()) {
-                if ( (emp.get(s).isEmpty() == false) ) {res = false; break;}
+                if ( (!emp.get(s).isEmpty()) ) {res = false; break;}
             }
         }finally {l_fila_de_espera.unlock();}
 
@@ -254,7 +254,7 @@ public class Node {
     }
 
     //recessor geral
-    private void servidor() throws IOException {
+    private void servidor() {
         // Uma especie de recessionista
         new Thread(() -> {
 
@@ -329,6 +329,7 @@ public class Node {
                                         try {
                                             l_vizinhos.lock();
                                             l_vizinhos_udp.lock();
+
                                             SetVizinhos(mensagem_split[1]);
                                         } finally {
                                             l_vizinhos.unlock();
@@ -395,7 +396,7 @@ public class Node {
                                         break;
 
                                     case "Stream?":
-                                        if (!Stremar) {
+                                        if (!this.Stremar) {
                                             try {
                                                 l_arvores_completas.lock();
                                                 if (this.arvores_completas.isEmpty()) {
@@ -427,7 +428,9 @@ public class Node {
                                             }
                                         } else {
                                             System.out.println("Hora de fazer multicast");
-                                           Thread t1 = new Thread(() -> servidor_stream(ip));
+                                            sendSream(ip,mensagem_split[1]);
+                                            Thread.sleep(30);
+                                            Thread t1 = new Thread(() -> servidor_stream(ip));
                                             try {
                                                 l_thread.lock();
                                                 lista_threads.put(ip,t1);
@@ -456,7 +459,6 @@ public class Node {
 
                                         System.out.println("Eu "+ this.ip + "estou pronto para stremar!!!");
                                         break;
-
                                     case "Acabou":
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore  a desativar
                                         this.Stremar = false;
@@ -518,7 +520,7 @@ public class Node {
                                 }
                             }
                         }
-                    } catch (IOException e) {
+                    } catch (IOException | InterruptedException e) {
                         e.printStackTrace();
                     }
                 }).start();
@@ -527,32 +529,41 @@ public class Node {
 
     // recetor e propagador de strems
     private void servidor_stream(String ip_vizinho) {
-            try (DatagramSocket socket = new DatagramSocket(this.porta_strems)) {
-                try {
-                    byte[] receiveData = new byte[1024];
-                    while (true) {
-                        DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-                        socket.receive(receivePacket);
+        try (DatagramSocket socket = new DatagramSocket(this.porta_strems)) {
+            try {
+                byte[] receiveData;
+                while (true) {
+                    DatagramPacket receivePacket = new DatagramPacket(new byte[1024], 1024);
+                    socket.receive(receivePacket);
 
-                        // Converte os bytes recebidos para um DataInputStream
-                        ByteArrayInputStream byteStream = new ByteArrayInputStream(receivePacket.getData());
-                        DataInputStream dataInputStream = new DataInputStream(byteStream);
+                    // Obter o tamanho real dos dados recebidos
+                    int length = receivePacket.getLength();
 
-                        // Lê os dados do DataInputStream
-                        int length = dataInputStream.readInt();
-                        byte[] data = new byte[length];
-                        dataInputStream.readFully(data);
+                    // Criar um novo array apenas com os dados válidos
+                    receiveData = Arrays.copyOf(receivePacket.getData(), length);
+                    System.out.println("Eu " +this.ip);
 
-                        DatagramPacket sendPacket = new DatagramPacket(data, data.length, InetAddress.getByName("localhost"), this.vizinhos_udp.get(ip_vizinho));
-                        socket.send(sendPacket);
+                    // Converte os bytes recebidos para um DataInputStream
+                    ByteArrayInputStream byteStream = new ByteArrayInputStream(receiveData);
+                    DataInputStream dataInputStream = new DataInputStream(byteStream);
 
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
+                    // Lê os dados do DataInputStream
+                    int dataLength = dataInputStream.readInt();
+                    byte[] data = new byte[dataLength];
+                    //System.out.println(data.length);
+                    dataInputStream.readFully(data);
+
+
+                    DatagramPacket sendPacket = new DatagramPacket(data, data.length, InetAddress.getByName("localhost"), this.vizinhos_udp.get(ip_vizinho));
+                    socket.send(sendPacket);
+
                 }
-            } catch (SocketException e) {
+            } catch (IOException e) {
                 e.printStackTrace();
             }
+        } catch (SocketException e) {
+            e.printStackTrace();
+        }
     }
 
     // primeira fase defenir os vizinhos
@@ -777,7 +788,8 @@ public class Node {
             for (Integer i: this.arvores_completas.keySet()) {
                     if ( this.arvores_completas.get(i)[1].equals(arvore_nova)) {b = true; break;}
             }
-            if (!b){String temp[] = {ip,arvore_nova}; Integer d = this.arvores_completas.size()+1; this.arvores_completas.put(d,temp);}
+            if (!b){
+                String[] temp = {ip,arvore_nova}; Integer d = this.arvores_completas.size()+1; this.arvores_completas.put(d,temp);}
         }finally {l_arvores_completas.unlock();}
 
     }
