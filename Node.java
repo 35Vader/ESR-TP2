@@ -483,7 +483,7 @@ public class Node {
 
                                         temp.interrupt();
 
-                                        sendAcabou(ip_a_enviar,mensagem_split[1]);
+                                        if ( !ip_a_enviar.equals("") ) sendAcabou(ip_a_enviar,mensagem_split[1]);
                                         System.out.println("Eu " + this.ip + " interrompi a stream do " + ip);
                                         break;
 

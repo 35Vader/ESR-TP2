@@ -127,10 +127,18 @@ public class Multicast_exemplo {
         servidor.inicializador();
         Thread.sleep(30);
 
-        // quinta fase a stream em sí
+        // sexta fase multicast
         professorLima.QueroStream();
+        Thread.sleep(200);
         professorFlavio.ligacao();
+        Thread.sleep(40);
+        professorFlavio.TudoOK();
+        Thread.sleep(40);
+        professorFlavio.QueroStream();
+        Thread.sleep(200);
+        professorLima.NaoQueroStream();
+        Thread.sleep(200);
+        professorFlavio.NaoQueroStream();
 
-        // acabou e verificar se as atualizações estão bem
     }
 }
