@@ -149,30 +149,25 @@ public class RP {
 
     }
 
-    private static String joinArray(String[] array) {
-        StringBuilder result = new StringBuilder();
-
-        for (int i = 0; i < array.length; i++) {
-            result.append(array[i]);
-
-            if (i < array.length - 1) {
-                // Adiciona um ponto de exclamação (!) entre os elementos, exceto no último
-                result.append("!");
-            }
-        }
-
-        return result.toString();
-    }
 
     private String Atualiza(Long novaLatencia, String arvore_a_atualizar){
         String[] caminhos = arvore_a_atualizar.split("!");
+        String res = "";
+        int i = 0;
         for (String s : caminhos) {
 
             String[] partes = s.split(",");
-            if (partes[0].equals(this.ip)) { partes[1] = novaLatencia.toString();break;}
-        }
+            if (partes[0].equals(this.ip)) res += partes[0] + "," + novaLatencia.toString() + "," + partes[2] + "!";
 
-        return  joinArray(caminhos);
+            else{
+                if( i < caminhos.length - 1 || i == 0) res += s + "!";
+                else res += s;
+            }
+            i++;
+
+        }
+        return  res;
+
     }
 
     private Long GetLatencia(String arvore) {
@@ -207,6 +202,13 @@ public class RP {
             temp.add(mensagem);
             fila.put(ip, temp);
         }
+
+    }
+
+    private void SmartPut(String ip,Thread t) {
+        if ((this.lista_threads.get(ip)) == null) this.lista_threads.put(ip,t);
+
+        else { this.lista_threads.remove(ip); this.lista_threads.put(ip,t);}
 
     }
 
@@ -392,7 +394,7 @@ public class RP {
                                         });
                                         try {
                                             l_thread.lock();
-                                            lista_threads.put(ip,t1);
+                                            SmartPut(ip,t1);
                                         }finally {l_thread.unlock();}
                                         t1.start();
 
@@ -434,7 +436,9 @@ public class RP {
                                         sendAcabou();
                                         System.out.println("Eu " + this.ip + " vou pedir ao servidor que interrompa a stream");
                                         Thread.sleep(3);
+
                                         requestLatencia(ip,mensagem_split[1]);
+                                        System.out.println("Eu " + this.ip + " vou pedir para atualizar esta arvore " + mensagem_split[1]);
                                         break;
 
                                     case "Atualizei":
@@ -449,6 +453,7 @@ public class RP {
                                         }
                                         String arvore_atualizada1 = Atualiza(latencia1, mensagem_split[1]);
                                         escritor_vizinho(ip,this.ip + "-Atualiza?/" + arvore_atualizada1);
+                                        System.out.println("Eu " + this.ip + " atualisei e ficou assim " + arvore_atualizada1);
                                         break;
 
                                     case "ArvoreAtualizada":
