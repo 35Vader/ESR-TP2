@@ -24,6 +24,8 @@ public class Cliente {
     // a porta do cliente
     private final int porta;
 
+    private Thread thread;
+
     ///lock da fila de espera;
     private final ReentrantLock l_fila_de_espera = new ReentrantLock();
 
@@ -170,7 +172,6 @@ public class Cliente {
                     try {
                         while (true) {
                             if (!IsEmpty (this.fila_de_espera) ){
-                                Thread t1;
                                 String mensagem;
                                 String ip;
                                 try {
@@ -248,8 +249,14 @@ public class Cliente {
                                             l_arvores_completas.unlock();
                                         }
                                         this.ReceberStream = true;
-                                        t1 = new Thread(this::servidor_stream);
-                                        t1.start();
+                                        this.thread = new Thread(() -> {
+                                            try {
+                                                servidor_stream();
+                                            } catch (IOException e) {
+                                                e.printStackTrace();
+                                            }
+                                        });
+                                        this.thread.start();
                                         break;
 
                                     //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa atualizada totalmente
@@ -261,6 +268,7 @@ public class Cliente {
                                             l_arvores_completas.unlock();
                                         }
                                         escritor_vizinho(this.ip + "-ArvoreAtualizada/" + mensagem_split[1]);
+                                        System.out.println(" Cliente: Obrigado pela arvore atualizada " + mensagem_split[1]);
                                         break;
 
                                     case "Atualiza":
@@ -301,37 +309,19 @@ public class Cliente {
     }
 
     // recetor e propagador de strems
-    private void servidor_stream() {
+    private void servidor_stream() throws IOException {
         System.out.println("Vou finalmente ver a stream " + this.ip);
-        try (DatagramSocket socket = new DatagramSocket(this.porta_strems)) {
-            try {
-                byte[] receiveData = new byte[1024];
-                while (true) {
-                    DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-                    socket.receive(receivePacket);
-
-
-                    // Converte os bytes recebidos para um DataInputStream
-                    ByteArrayInputStream byteStream = new ByteArrayInputStream(receivePacket.getData());
-                    DataInputStream dataInputStream = new DataInputStream(byteStream);
-
-                    // Lê os dados do DataInputStream
-                    int length = dataInputStream.readInt();
-                    byte[] data = new byte[length];
-                    dataInputStream.readFully(data);
-
-                    // mostra a stream
-                    String resposta = new String(receivePacket.getData(), 0, receivePacket.getLength());
-                    System.out.println("Stream: " + resposta);
-
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        } catch (SocketException e) {
-            e.printStackTrace();
+        ServerSocket ouvinte_mestre = new ServerSocket(this.porta_strems);
+        Socket ouvinte = ouvinte_mestre.accept();
+        BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
+        int i = 0;
+        while (true) {
+            String mensagem = leitor_vizinho.readLine();
+            if (i < 5) {System.out.println("Eu " + this.ip + " estou a ver esta " + mensagem);i++;}
         }
+
     }
+
 
     public void QueroStream() throws IOException{
 
@@ -387,28 +377,33 @@ public class Cliente {
 
 
     public void NaoQueroStream() throws IOException {
-        String arvore_a_desativar;
+        if(this.ReceberStream){
+            String arvore_a_desativar;
+            try {
+                l_arvores_completas.lock();
+                arvore_a_desativar =  this.arvores_completas.get(ip_do_node_folha).getArvore();
+                this.arvores_completas.get(ip_do_node_folha).setEstado(false);
+            } finally { l_arvores_completas.unlock();}
 
-        try {
-            l_arvores_completas.lock();
-            arvore_a_desativar =  this.arvores_completas.get(ip_do_node_folha).getArvore();
-            this.arvores_completas.get(ip_do_node_folha).setEstado(false);
-        } finally { l_arvores_completas.unlock();}
+            Socket bootstraper;
+            PrintWriter escritor;
 
-        Socket bootstraper;
-        PrintWriter escritor;
+            bootstraper = new Socket("localhost", porta_do_node_folha);
+            escritor = new PrintWriter(bootstraper.getOutputStream(), true);
+            this.ReceberStream = false;
 
-        bootstraper = new Socket(ip, porta_do_node_folha);
-        escritor = new PrintWriter(bootstraper.getOutputStream(), true);
-        this.ReceberStream = false;
-        escritor.println(this.ip + "-" + "Acabou/" + arvore_a_desativar);
+            this.thread.interrupt();
 
-        try {
-            escritor.close();
-            bootstraper.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+            escritor.println(this.ip + "-" + "Acabou/" + arvore_a_desativar);
+            System.out.println("Eu " + this.ip + " não quero ver mais esta stream.");
+            try {
+                escritor.close();
+                bootstraper.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }}
+
+        else System.out.println("Não faz sentido acabar o que não começou!");
     }
 }
 

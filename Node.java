@@ -430,7 +430,13 @@ public class Node {
                                             System.out.println("Hora de fazer multicast");
                                             sendSream(ip,mensagem_split[1]);
                                             Thread.sleep(30);
-                                            Thread t1 = new Thread(() -> servidor_stream(ip));
+                                            Thread t1 = new Thread(() -> {
+                                                try {
+                                                    servidor_stream(ip);
+                                                } catch (IOException e) {
+                                                    e.printStackTrace();
+                                                }
+                                            });
                                             try {
                                                 l_thread.lock();
                                                 lista_threads.put(ip,t1);
@@ -445,10 +451,16 @@ public class Node {
 
                                         String ip_a_enviar2 = QuemEnviarBottomUp(mensagem_split[1]);
 
-                                        Thread t1 = new Thread(() -> servidor_stream(ip_a_enviar2));
+                                        Thread t1 = new Thread(() -> {
+                                            try {
+                                                servidor_stream(ip_a_enviar2);
+                                            } catch (IOException e) {
+                                                e.printStackTrace();
+                                            }
+                                        });
                                         try {
                                             l_thread.lock();
-                                            lista_threads.put(ip,t1);
+                                            lista_threads.put(ip_a_enviar2,t1);
                                         }finally {l_thread.unlock();}
                                         t1.start();
 
@@ -472,6 +484,7 @@ public class Node {
                                         temp.interrupt();
 
                                         sendAcabou(ip_a_enviar,mensagem_split[1]);
+                                        System.out.println("Eu " + this.ip + " interrompi a stream do " + ip);
                                         break;
 
                                     case "Atualiza?":
@@ -527,43 +540,20 @@ public class Node {
         }).start();
     }
 
-    // recetor e propagador de strems
-    private void servidor_stream(String ip_vizinho) {
-        try (DatagramSocket socket = new DatagramSocket(this.porta_strems)) {
-            try {
-                byte[] receiveData;
-                while (true) {
-                    DatagramPacket receivePacket = new DatagramPacket(new byte[1024], 1024);
-                    socket.receive(receivePacket);
+    private void servidor_stream(String ip_vizinho) throws IOException {
 
-                    // Obter o tamanho real dos dados recebidos
-                    int length = receivePacket.getLength();
+        ServerSocket ouvinte_mestre = new ServerSocket(this.porta_strems);
+        Socket ouvinte = ouvinte_mestre.accept();
+        BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
 
-                    // Criar um novo array apenas com os dados válidos
-                    receiveData = Arrays.copyOf(receivePacket.getData(), length);
-                    System.out.println("Eu " +this.ip);
+        Socket streamSocket = new Socket("localhost", this.vizinhos_udp.get(ip_vizinho));
+        PrintWriter escritor = new PrintWriter(streamSocket.getOutputStream(), true);
 
-                    // Converte os bytes recebidos para um DataInputStream
-                    ByteArrayInputStream byteStream = new ByteArrayInputStream(receiveData);
-                    DataInputStream dataInputStream = new DataInputStream(byteStream);
-
-                    // Lê os dados do DataInputStream
-                    int dataLength = dataInputStream.readInt();
-                    byte[] data = new byte[dataLength];
-                    //System.out.println(data.length);
-                    dataInputStream.readFully(data);
-
-
-                    DatagramPacket sendPacket = new DatagramPacket(data, data.length, InetAddress.getByName("localhost"), this.vizinhos_udp.get(ip_vizinho));
-                    socket.send(sendPacket);
-
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        } catch (SocketException e) {
-            e.printStackTrace();
+        while (true) {
+            String mensagem = leitor_vizinho.readLine();
+            escritor.println(mensagem);
         }
+
     }
 
     // primeira fase defenir os vizinhos
@@ -810,7 +800,7 @@ public class Node {
 
         try {
             l_lantencia.lock();
-            latencia.put(ip, tempo_ini);
+            latencia.put(ip_do_vizinho_a_enviar, tempo_ini);
         } finally {
             l_lantencia.unlock();
         }

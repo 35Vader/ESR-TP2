@@ -10,7 +10,6 @@ import java.util.concurrent.locks.ReentrantLock;
 public class Servidor {
 
     private int porta;
-    private int porta_strems;
     private int porta_RP;
 
     ///lock da fila de espera;
@@ -26,9 +25,8 @@ public class Servidor {
     private final HashMap<String, ArrayList<String>> fila_de_espera = new HashMap<>();
 
 
-    public Servidor(int porta, int porta_strems, int porta_RP){
+    public Servidor(int porta, int porta_RP){
         this.porta = porta;
-        this.porta_strems = porta_strems;
         this.porta_RP = porta_RP;
     }
 
@@ -122,7 +120,13 @@ public class Servidor {
                                     }
 
                                     System.out.println("Preparados ou não aqui vou eu stremar");
-                                    Thread t1 = new Thread(() -> servidor_stream());
+                                    Thread t1 = new Thread(() -> {
+                                        try {
+                                            servidor_stream();
+                                        } catch (IOException e) {
+                                            e.printStackTrace();
+                                        }
+                                    });
                                     try {
                                         l_thread.lock();
                                         lista_threads.put(ip,t1);
@@ -151,43 +155,23 @@ public class Servidor {
         }).start();
     }
 
-    private void servidor_stream() {
-        try (DatagramSocket socket = new DatagramSocket(this.porta_strems)) {
-            try {
-                // Abre o arquivo para leitura
-                BufferedReader reader = new BufferedReader(new FileReader("stream.txt"));
-                String linha;
+    private void servidor_stream() throws IOException {
+        Socket streamSocket;
+        PrintWriter escritor;
 
-                while ((linha = reader.readLine()) != null) {
-                    // Dados a serem enviados como bytes
-                    byte[] data = linha.getBytes();
+        streamSocket = new Socket("localhost", porta_RP);
 
-                    //byte[] data = "Ola".getBytes();
+        escritor = new PrintWriter(streamSocket.getOutputStream(), true);
+        BufferedReader reader = new BufferedReader(new FileReader("stream.txt"));
 
-                    // Cria um DataOutputStream para facilitar a escrita de dados binários
-                    ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
-                    DataOutputStream dataOutputStream = new DataOutputStream(byteStream);
+        String linha;
 
-                    // Escreve o comprimento dos dados seguido pelos próprios dados
-                    dataOutputStream.writeInt(data.length);
-                    dataOutputStream.write(data);
-
-                    // Converte os dados para um array de bytes
-                    byte[] sendData = byteStream.toByteArray();
-
-                    // Envia os dados ao RP
-                    DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, InetAddress.getByName("localhost"), porta_RP);
-                    socket.send(sendPacket);
-                }
-
-                // Fecha o arquivo após a leitura
-                reader.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        } catch (SocketException e) {
-            e.printStackTrace();
+        while (true) {
+            // Envia a linha como uma string
+            linha = reader.readLine();
+            escritor.println(linha);
         }
     }
+
 
 }
