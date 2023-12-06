@@ -24,6 +24,12 @@ public class Node {
     // porta do socket de tcp
     private final int porta;
 
+    //lock da lista das arvores ativas
+    private final ReentrantLock l_arvores_ativas = new ReentrantLock();
+
+    // lock da lista de vizinhos em "cima de mim" a receber stream
+    private  final ReentrantLock l_ativos = new ReentrantLock();
+
     //lock das listas de latencias
     private final ReentrantLock l_lantencia = new ReentrantLock();
 
@@ -72,6 +78,12 @@ public class Node {
     // ip -> Thread a interromper
     private final HashMap<String, Thread> lista_threads = new HashMap<>();
 
+    // ip a cima de mim -> bool
+    private final HashMap <String,Boolean> lista_estados = new HashMap<>();
+
+    // arvore -> estado
+    private final HashMap<String,Boolean> lista_arvores_ativas = new HashMap<>();
+
     // Construtor
     public Node(String ip, int porta, int porta_bootstraper, int porta_strems){
 
@@ -105,6 +117,21 @@ public class Node {
 
         }
     }
+
+    private String ArvoreMulticast(String arvore){
+        String res = "";
+        String[] trocas = arvore.split(",");
+        for (String s: this.lista_arvores_ativas.keySet()) {
+            if(this.lista_arvores_ativas.get(s) == true){
+                String[] caminhos = arvore.split("!");
+                for (String ss : caminhos) { res += ss + "!"; }
+                break;
+                }
+            }
+        res += trocas[2] + trocas[1] + trocas[0];
+
+        return res;
+        }
 
     private String Atualiza(Long novaLatencia, String arvore_a_atualizar){
         String[] caminhos = arvore_a_atualizar.split("!");
@@ -183,6 +210,12 @@ public class Node {
         return res;
     }
 
+    private void SmartPut(String ip, Boolean b) {
+        if ((this.lista_estados.get(ip)) == null) this.lista_estados.put(ip,b);
+
+        else { this.lista_estados.remove(ip); this.lista_estados.put(ip,b);}
+
+    }
 
     private void SmartPut(String ip,Thread t) {
         if ((this.lista_threads.get(ip)) == null) this.lista_threads.put(ip,t);
@@ -428,7 +461,19 @@ public class Node {
                                             }
                                         } else {
                                             System.out.println("Hora de fazer multicast");
-                                            sendSream(ip,mensagem_split[1]);
+                                            this.Stremar = true;
+                                            String Arvoremulticast;
+                                            try {
+                                                l_ativos.lock();
+                                                l_arvores_ativas.lock();
+                                                Arvoremulticast =  ArvoreMulticast(mensagem_split[1]);
+                                                SmartPut(ip,true);
+                                                S // colucar a Arvoremulticast no arvores completas e no arvores ativas faz um SmartPut para as arvores ativas
+                                            }finally {
+                                                l_arvores_ativas.unlock();
+                                                l_ativos.unlock();}
+
+                                            sendSream(ip, Arvoremulticast);
                                             Thread.sleep(30);
                                             Thread t1 = new Thread(() -> {
                                                 try {
@@ -448,6 +493,11 @@ public class Node {
                                     case "Stream":
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa
                                         this.Stremar = true;
+                                        try {
+                                            l_ativos.lock();
+                                            SmartPut(ip,true);
+                                            S // fazer um smart put nas lista de arvores ativas
+                                        }finally {l_ativos.unlock();}
 
                                         String ip_a_enviar2 = QuemEnviarBottomUp(mensagem_split[1]);
 
@@ -473,7 +523,16 @@ public class Node {
                                         break;
                                     case "Acabou":
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore  a desativar
-                                        this.Stremar = false;
+                                        boolean b;
+                                        try {
+                                            l_ativos.lock();
+                                            SmartPut(ip,false);
+
+                                            b = this.lista_estados.values().stream().allMatch(value -> value.equals(false));
+                                            S // fazer um smartPut nas arvores ativas
+
+                                        }finally {l_ativos.unlock();}
+
                                         String ip_a_enviar = QuemEnviarTopDown(mensagem_split[1]);
                                         Thread temp;
                                         try {
@@ -483,8 +542,11 @@ public class Node {
 
                                         temp.interrupt();
 
-                                        if ( !ip_a_enviar.equals("") ) sendAcabou(ip_a_enviar,mensagem_split[1]);
-                                        System.out.println("Eu " + this.ip + " interrompi a stream do " + ip);
+                                        if (b) {
+                                            sendAcabou(ip_a_enviar,mensagem_split[1]);
+                                            System.out.println("Eu " + this.ip + " interrompi a stream do " + ip);
+                                            this.Stremar = false;
+                                        }
                                         break;
 
                                     case "Atualiza?":

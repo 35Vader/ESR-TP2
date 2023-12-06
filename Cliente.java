@@ -334,12 +334,12 @@ public class Cliente {
 
             this.latencia = System.currentTimeMillis();
             escritor.println(this.ip + "-" + "metricas?/ " );
-            System.out.println("Cliente: Bolas! Não existem arvores! vou madar flow");
+            System.out.println( this.ip + " : Bolas! Não existem arvores! vou madar flow");
         }
         else {
 
             escritor.println(this.ip + "-" + "Stream?/" + this.arvores_completas.get(this.ip_do_node_folha).getArvore());
-            System.out.println("Fixe! já posso pedir stream já existe arvore que é esta "
+            System.out.println( this.ip + "Fixe! já posso pedir stream já existe arvore que é esta "
                     + this.arvores_completas.get(this.ip_do_node_folha).getArvore());
         }
 

@@ -129,15 +129,19 @@ public class Multicast_exemplo {
 
         // sexta fase multicast
         professorLima.QueroStream();
-        Thread.sleep(200);
+        Thread.sleep(300);
+
         professorFlavio.ligacao();
-        Thread.sleep(40);
+        Thread.sleep(150);
+
         professorFlavio.TudoOK();
-        Thread.sleep(40);
+        Thread.sleep(150);
+
         professorFlavio.QueroStream();
-        Thread.sleep(200);
+        Thread.sleep(300);
+
         professorLima.NaoQueroStream();
-        Thread.sleep(200);
+        Thread.sleep(300);
         professorFlavio.NaoQueroStream();
 
     }
