@@ -15,11 +15,10 @@ public class Bootstraper {
     // flag se diz se eu estou a stremar ou não
     private boolean Stremar = false;
 
-    // porta do socket udp para enviar strems
-    private final int porta_strems;
-
     // porta do socket de tcp
     private final int porta;
+
+    private final  int porta_strems;
 
     // lock da topologia tcp
     private final ReentrantLock l_topologia = new ReentrantLock();
@@ -32,6 +31,12 @@ public class Bootstraper {
 
     // lock da lista de arvores_incompletas de caminhos
     private final ReentrantLock l_mensagem = new ReentrantLock();
+
+    //lock da lista das arvores ativas
+    private final ReentrantLock l_arvores_ativas = new ReentrantLock();
+
+    // lock da lista de vizinhos em "cima de mim" a receber stream
+    private  final ReentrantLock l_ativos = new ReentrantLock();
 
     ///lock da fila de espera;
     private final ReentrantLock l_fila_de_espera = new ReentrantLock();
@@ -75,6 +80,12 @@ public class Bootstraper {
     // ip -> Thread a interromper
     private final HashMap<String, Thread> lista_threads = new HashMap<>();
 
+    // ip a cima de mim -> bool
+    private final HashMap <String,Boolean> lista_estados = new HashMap<>();
+
+    // arvore -> estado
+    private final HashMap<String,Boolean> lista_arvores_ativas = new HashMap<>();
+
     // Construtor
     public Bootstraper(String ip, int porta, int porta_strems){
 
@@ -82,6 +93,7 @@ public class Bootstraper {
         this.porta = porta;
         this.porta_strems = porta_strems;
     }
+
 
     public void setTopologia(String ip,HashMap<String,Integer> v_tcp, HashMap<String,Integer> v_udp){
         this.topologia.put(ip,v_tcp);
@@ -94,7 +106,7 @@ public class Bootstraper {
         }
 
         for (String s :vizinhos_udp.keySet()) {
-            this.vizinhos.put(s,vizinhos_udp.get(s));
+            this.vizinhos_udp.put(s,vizinhos_udp.get(s));
         }
 
     }
@@ -136,6 +148,43 @@ public class Bootstraper {
         }
     }
 
+    private String ArvoreMulticast(String novoInput) {
+        String res = "";
+
+        for (String arvore : this.lista_arvores_ativas.keySet()) {
+            if (this.lista_arvores_ativas.get(arvore)) {
+                System.out.println(arvore);
+                String[] caminhos = arvore.split("!");
+
+                // Encontrar o argumento igual ao último argumento do novoInput
+                String ultimoArgumentoNovoInput = novoInput.split(",")[2];
+                int indiceUltimoArgumento = -1;
+                for (int i = caminhos.length - 1; i >= 0; i--) {
+                    if (caminhos[i].endsWith(ultimoArgumentoNovoInput)) {
+                        indiceUltimoArgumento = i;
+                        break;
+                    }
+                }
+
+                if (indiceUltimoArgumento != -1) {
+                    // Adicionar caminhos até o argumento encontrado
+                    for (int i = 0; i <= indiceUltimoArgumento; i++) {
+                        res += caminhos[i] + "!";
+                    }
+
+                    // Adicionar novoInput invertido após o argumento
+                    String inputInvertido = novoInput.split(",")[2] + "," +
+                            novoInput.split(",")[1] + "," +
+                            novoInput.split(",")[0];
+                    res += inputInvertido;
+                }
+
+                break;
+            }
+        }
+
+        return res;
+    }
 
     private String Atualiza(Long novaLatencia, String arvore_a_atualizar) {
         String[] caminhos = arvore_a_atualizar.split("!");
@@ -186,6 +235,20 @@ public class Bootstraper {
         if ((this.lista_threads.get(ip)) == null) this.lista_threads.put(ip,t);
 
         else { this.lista_threads.remove(ip); this.lista_threads.put(ip,t);}
+
+    }
+
+    private void SmartPut(String ip, Boolean b) {
+        if ((this.lista_estados.get(ip)) == null) this.lista_estados.put(ip,b);
+
+        else { this.lista_estados.remove(ip); this.lista_estados.put(ip,b);}
+
+    }
+
+    private void SmartPutArvore(String arvore, Boolean b) {
+        if ((this.lista_arvores_ativas.get(arvore)) == null) this.lista_arvores_ativas.put(arvore,b);
+
+        else { this.lista_estados.remove(arvore); this.lista_estados.put(arvore,b);}
 
     }
 
@@ -410,7 +473,7 @@ public class Bootstraper {
                                         break;
 
                                     case "Stream?":
-                                        if (!Stremar) {
+                                        if (!this.Stremar) {
                                             try {
                                                 l_arvores_completas.lock();
                                                 if (this.arvores_completas.isEmpty()) {
@@ -426,12 +489,15 @@ public class Bootstraper {
                                                 } else {
 
                                                     if (this.arvores_completas.size() == 1) {
-                                                        sendTree(this.arvores_completas.get(1)[0]);
+                                                        String ip_a_enviar = QuemEnviarTopDown(this.arvores_completas.get(1)[1]);
+                                                        sendTree(ip_a_enviar);
+                                                        System.out.println("Eu "+ this.ip + " vou enviar este ip: " + ip_a_enviar);
                                                     }
 
                                                     if (this.arvores_completas.size() > 1) {
                                                         String ip_enviar = ChooseTree();
                                                         sendTree(ip_enviar);
+                                                        System.out.println("Eu "+ this.ip + "vou enviar este ip: " + ip_enviar);
                                                     }
                                                 }
                                             } finally {
@@ -439,9 +505,33 @@ public class Bootstraper {
                                             }
                                         } else {
                                             System.out.println("Hora de fazer multicast");
+                                            this.Stremar = true;
+                                            String Arvoremulticast;
+                                            String ip_novo;
+                                            try {
+                                                l_ativos.lock();
+                                                l_arvores_ativas.lock();
+                                                l_arvores_completas.lock();
+
+                                                Arvoremulticast =  ArvoreMulticast(mensagem_split[1]);
+                                                ip_novo = QuemEnviarBottomUp(Arvoremulticast);
+                                                SmartPut(ip_novo,true);
+                                                // colucar a Arvoremulticast no arvores completas e no arvores ativas faz um SmartPut para as arvores ativas
+                                                SmartPutArvore(Arvoremulticast,true);
+
+                                                String[] yy = {ip_novo, Arvoremulticast,};
+                                                this.arvores_completas.put(this.arvores_completas.size() + 1,yy);
+
+                                            }finally {
+                                                l_arvores_completas.unlock();
+                                                l_arvores_ativas.unlock();
+                                                l_ativos.unlock();}
+
+                                            sendSream(ip_novo, Arvoremulticast);
+                                            Thread.sleep(30);
                                             Thread t1 = new Thread(() -> {
                                                 try {
-                                                    servidor_stream(ip);
+                                                    servidor_stream(ip_novo);
                                                 } catch (IOException e) {
                                                     e.printStackTrace();
                                                 }
@@ -457,8 +547,15 @@ public class Bootstraper {
                                     case "Stream":
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa
                                         this.Stremar = true;
-
                                         String ip_a_enviar2 = QuemEnviarBottomUp(mensagem_split[1]);
+
+                                        try {
+                                            l_ativos.lock();
+
+                                            SmartPut(ip_a_enviar2,true);
+                                            SmartPutArvore(mensagem_split[1],true);
+                                            // fazer um smart put nas lista de arvores ativas
+                                        }finally {l_ativos.unlock();}
 
                                         Thread t1 = new Thread(() -> {
                                             try {
@@ -469,21 +566,31 @@ public class Bootstraper {
                                         });
                                         try {
                                             l_thread.lock();
-                                            SmartPut(ip,t1);
+                                            SmartPut(ip_a_enviar2,t1);
                                         }finally {l_thread.unlock();}
                                         t1.start();
 
                                         sendSream(ip_a_enviar2,mensagem_split[1]);
 
-                                        Thread t = new Thread( () -> AddArvore(mensagem_split[1],ip) );
+                                        Thread t = new Thread( () -> AddArvore(mensagem_split[1],ip_a_enviar2) );
                                         t.start();
 
                                         System.out.println("Eu "+ this.ip + "estou pronto para stremar!!!");
                                         break;
-
                                     case "Acabou":
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore  a desativar
-                                        this.Stremar = false;
+                                        boolean b;
+                                        try {
+                                            l_ativos.lock();
+                                            l_arvores_ativas.lock();
+                                            SmartPut(ip,false);
+                                            SmartPutArvore(mensagem_split[1],false);
+
+                                            b = this.lista_estados.values().stream().allMatch(value -> value.equals(false));
+                                            // fazer um smartPut nas arvores ativas
+
+                                        }finally {l_ativos.unlock(); l_arvores_ativas.unlock();}
+
                                         String ip_a_enviar = QuemEnviarTopDown(mensagem_split[1]);
                                         Thread temp;
                                         try {
@@ -492,10 +599,13 @@ public class Bootstraper {
                                         }finally {l_thread.unlock();}
 
                                         temp.interrupt();
-                                        System.out.println("Eu " + this.ip + " interrompi a stream do " + ip);
-                                        sendAcabou(ip_a_enviar,mensagem_split[1]);
-                                        break;
 
+                                        if (b) {
+                                            sendAcabou(ip_a_enviar,mensagem_split[1]);
+                                            System.out.println("Eu " + this.ip + " interrompi a stream do " + ip);
+                                            this.Stremar = false;
+                                        }
+                                        break;
                                     case "Atualiza?":
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa atualizada até mim
                                         String ip_a_enviar1 = QuemEnviarBottomUp(mensagem_split[1]);
@@ -542,7 +652,7 @@ public class Bootstraper {
                                 }
                             }
                         }
-                    } catch (IOException e) {
+                    } catch (IOException | InterruptedException e) {
                         e.printStackTrace();
                     }
                 }).start();
@@ -551,7 +661,6 @@ public class Bootstraper {
     }
 
     private void servidor_stream(String ip_vizinho) throws IOException {
-
         ServerSocket ouvinte_mestre = new ServerSocket(this.porta_strems);
         Socket ouvinte = ouvinte_mestre.accept();
         BufferedReader leitor_vizinho = new BufferedReader(new InputStreamReader(ouvinte.getInputStream()));
@@ -566,7 +675,6 @@ public class Bootstraper {
 
     }
 
-    //fase para ver se os vizinhos estão ok
     private void okVizinhos() {
         for (String ip : vizinhos.keySet()) {
             Socket vizinho = null;

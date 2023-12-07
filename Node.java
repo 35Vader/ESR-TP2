@@ -118,20 +118,44 @@ public class Node {
         }
     }
 
-    private String ArvoreMulticast(String arvore){
+    //6.6.6.6,34,5.5.5.5!5.5.5.5,25,2.2.2.2!2.2.2.2,121,8.8.8.8
+    private String ArvoreMulticast(String novoInput) {
         String res = "";
-        String[] trocas = arvore.split(",");
-        for (String s: this.lista_arvores_ativas.keySet()) {
-            if(this.lista_arvores_ativas.get(s) == true){
+
+        for (String arvore : this.lista_arvores_ativas.keySet()) {
+            if (this.lista_arvores_ativas.get(arvore)) {
+                System.out.println(arvore);
                 String[] caminhos = arvore.split("!");
-                for (String ss : caminhos) { res += ss + "!"; }
-                break;
+
+                // Encontrar o argumento igual ao último argumento do novoInput
+                String ultimoArgumentoNovoInput = novoInput.split(",")[2];
+                int indiceUltimoArgumento = -1;
+                for (int i = caminhos.length - 1; i >= 0; i--) {
+                    if (caminhos[i].endsWith(ultimoArgumentoNovoInput)) {
+                        indiceUltimoArgumento = i;
+                        break;
+                    }
                 }
+
+                if (indiceUltimoArgumento != -1) {
+                    // Adicionar caminhos até o argumento encontrado
+                    for (int i = 0; i <= indiceUltimoArgumento; i++) {
+                        res += caminhos[i] + "!";
+                    }
+
+                    // Adicionar novoInput invertido após o argumento
+                    String inputInvertido = novoInput.split(",")[2] + "," +
+                            novoInput.split(",")[1] + "," +
+                            novoInput.split(",")[0];
+                    res += inputInvertido;
+                }
+
+                break;
             }
-        res += trocas[2] + trocas[1] + trocas[0];
+        }
 
         return res;
-        }
+    }
 
     private String Atualiza(Long novaLatencia, String arvore_a_atualizar){
         String[] caminhos = arvore_a_atualizar.split("!");
@@ -214,6 +238,13 @@ public class Node {
         if ((this.lista_estados.get(ip)) == null) this.lista_estados.put(ip,b);
 
         else { this.lista_estados.remove(ip); this.lista_estados.put(ip,b);}
+
+    }
+
+    private void SmartPutArvore(String arvore, Boolean b) {
+        if ((this.lista_arvores_ativas.get(arvore)) == null) this.lista_arvores_ativas.put(arvore,b);
+
+        else { this.lista_estados.remove(arvore); this.lista_estados.put(arvore,b);}
 
     }
 
@@ -463,21 +494,32 @@ public class Node {
                                             System.out.println("Hora de fazer multicast");
                                             this.Stremar = true;
                                             String Arvoremulticast;
+                                            String ip_novo;
                                             try {
                                                 l_ativos.lock();
                                                 l_arvores_ativas.lock();
+                                                l_arvores_completas.lock();
+
                                                 Arvoremulticast =  ArvoreMulticast(mensagem_split[1]);
-                                                SmartPut(ip,true);
-                                                S // colucar a Arvoremulticast no arvores completas e no arvores ativas faz um SmartPut para as arvores ativas
+                                                System.out.println(Arvoremulticast);
+                                                ip_novo = QuemEnviarBottomUp(Arvoremulticast);
+                                                SmartPut(ip_novo,true);
+                                                // colucar a Arvoremulticast no arvores completas e no arvores ativas faz um SmartPut para as arvores ativas
+                                                SmartPutArvore(Arvoremulticast,true);
+
+                                                String[] yy = {ip_novo, Arvoremulticast,};
+                                                this.arvores_completas.put(this.arvores_completas.size() + 1,yy);
+
                                             }finally {
+                                                l_arvores_completas.unlock();
                                                 l_arvores_ativas.unlock();
                                                 l_ativos.unlock();}
 
-                                            sendSream(ip, Arvoremulticast);
+                                            sendSream(ip_novo, Arvoremulticast);
                                             Thread.sleep(30);
                                             Thread t1 = new Thread(() -> {
                                                 try {
-                                                    servidor_stream(ip);
+                                                    servidor_stream(ip_novo);
                                                 } catch (IOException e) {
                                                     e.printStackTrace();
                                                 }
@@ -493,13 +535,15 @@ public class Node {
                                     case "Stream":
                                         //"121.191.51.101 ,10, 121.191.52.101!etc!etc!etc" -> arvore ativa
                                         this.Stremar = true;
+                                        String ip_a_enviar2 = QuemEnviarBottomUp(mensagem_split[1]);
+
                                         try {
                                             l_ativos.lock();
-                                            SmartPut(ip,true);
-                                            S // fazer um smart put nas lista de arvores ativas
-                                        }finally {l_ativos.unlock();}
 
-                                        String ip_a_enviar2 = QuemEnviarBottomUp(mensagem_split[1]);
+                                            SmartPut(ip_a_enviar2,true);
+                                            SmartPutArvore(mensagem_split[1],true);
+                                            // fazer um smart put nas lista de arvores ativas
+                                        }finally {l_ativos.unlock();}
 
                                         Thread t1 = new Thread(() -> {
                                             try {
@@ -516,7 +560,7 @@ public class Node {
 
                                         sendSream(ip_a_enviar2,mensagem_split[1]);
 
-                                        Thread t = new Thread( () -> AddArvore(mensagem_split[1],ip) );
+                                        Thread t = new Thread( () -> AddArvore(mensagem_split[1],ip_a_enviar2) );
                                         t.start();
 
                                         System.out.println("Eu "+ this.ip + "estou pronto para stremar!!!");
@@ -526,12 +570,14 @@ public class Node {
                                         boolean b;
                                         try {
                                             l_ativos.lock();
+                                            l_arvores_ativas.lock();
                                             SmartPut(ip,false);
+                                            SmartPutArvore(mensagem_split[1],false);
 
                                             b = this.lista_estados.values().stream().allMatch(value -> value.equals(false));
-                                            S // fazer um smartPut nas arvores ativas
+                                            // fazer um smartPut nas arvores ativas
 
-                                        }finally {l_ativos.unlock();}
+                                        }finally {l_ativos.unlock(); l_arvores_ativas.unlock();}
 
                                         String ip_a_enviar = QuemEnviarTopDown(mensagem_split[1]);
                                         Thread temp;
@@ -602,6 +648,7 @@ public class Node {
                 }).start();
         }).start();
     }
+
 
     private void servidor_stream(String ip_vizinho) throws IOException {
 

@@ -12,7 +12,7 @@ public class Multicast_exemplo {
         vizinhos_bootstraper_udp.put("2.2.2.2",2220);
         vizinhos_bootstraper_udp.put("6.6.6.6",6660);
 
-        bootstraper.setvizinhos(vizinhos_bootstraper_tcp,vizinhos_bootstraper_tcp);
+        bootstraper.setvizinhos(vizinhos_bootstraper_tcp,vizinhos_bootstraper_udp);
 
         HashMap<String,Integer> vizinhos_um_tcp = new HashMap<>();
         vizinhos_um_tcp.put("2.2.2.2",2222); // Node2
@@ -100,8 +100,9 @@ public class Multicast_exemplo {
         quatro.inicializa();
         seis.inicializa();
         professorLima.ligacao();
+        professorFlavio.ligacao();
 
-        Thread.sleep(50);
+        Thread.sleep(100);
 
         //segunda fase
         um.PedeVizinhos();
@@ -120,8 +121,9 @@ public class Multicast_exemplo {
         seis.TudoOK();
         cinco.TudoOK();
         professorLima.TudoOK();
+        professorFlavio.TudoOK();
 
-        Thread.sleep(40);
+        Thread.sleep(500);
 
         // quarta fase
         servidor.inicializador();
@@ -129,19 +131,14 @@ public class Multicast_exemplo {
 
         // sexta fase multicast
         professorLima.QueroStream();
-        Thread.sleep(300);
-
-        professorFlavio.ligacao();
-        Thread.sleep(150);
-
-        professorFlavio.TudoOK();
-        Thread.sleep(150);
+        Thread.sleep(800);
 
         professorFlavio.QueroStream();
-        Thread.sleep(300);
+        Thread.sleep(500);
 
         professorLima.NaoQueroStream();
-        Thread.sleep(300);
+        Thread.sleep(500);
+
         professorFlavio.NaoQueroStream();
 
     }

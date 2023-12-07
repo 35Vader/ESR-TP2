@@ -12,7 +12,7 @@ public class Main {
             vizinhos_bootstraper_udp.put("2.2.2.2",2220);
             vizinhos_bootstraper_udp.put("6.6.6.6",6660);
 
-            bootstraper.setvizinhos(vizinhos_bootstraper_tcp,vizinhos_bootstraper_tcp);
+            bootstraper.setvizinhos(vizinhos_bootstraper_tcp,vizinhos_bootstraper_udp);
 
             HashMap<String,Integer> vizinhos_um_tcp = new HashMap<>();
             vizinhos_um_tcp.put("2.2.2.2",2222); // Node2
@@ -76,8 +76,8 @@ public class Main {
 
     public static void main(String[] args) throws IOException, InterruptedException {
 
-            Node um                 = new Node("1.1.1.1",1111,5555,1110);
-            Node dois               = new Node("2.2.2.2",2222,5555,2220);
+            Node um                 = new Node("1.1.1.1",1111,5555,1110); //1110 1101 1011
+            Node dois               = new Node("2.2.2.2",2222,5555,2220); //2220 2202 2022
             Node tres               = new Node("3.3.3.3",3333,5555,3330);
             Node quatro             = new Node("4.4.4.4",4444,5555,4440);
             RP seis                 = new RP("6.6.6.6",6666,5555,12345,6660);
