@@ -123,7 +123,7 @@ public class Servidor {
                                     Thread t1 = new Thread(() -> {
                                         try {
                                             servidor_stream();
-                                        } catch (IOException e) {
+                                        } catch (IOException | InterruptedException e) {
                                             e.printStackTrace();
                                         }
                                     });
@@ -155,7 +155,7 @@ public class Servidor {
         }).start();
     }
 
-    private void servidor_stream() throws IOException {
+    private void servidor_stream() throws IOException, InterruptedException {
         Socket streamSocket;
         PrintWriter escritor;
 
